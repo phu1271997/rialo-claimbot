@@ -35,7 +35,7 @@ export function PhotoUpload({
         });
         onChange(new File([compressed], next.name, { type: compressed.type }));
       } catch {
-        setError('Không nén được ảnh, thử ảnh khác nhé');
+        setError('Could not compress that image — try another one');
         onChange(null);
       } finally {
         setCompressing(false);
@@ -73,17 +73,17 @@ export function PhotoUpload({
         <input {...getInputProps()} />
         {compressing ? (
           <div className="flex items-center gap-2 text-sm text-slate-400">
-            <Spinner /> Đang nén ảnh…
+            <Spinner /> Compressing image…
           </div>
         ) : preview ? (
           // Blob preview of a user-selected file; next/image would need a remote loader.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="Ảnh damage đã chọn" className="max-h-64 rounded-xl object-contain" />
+          <img src={preview} alt="Selected damage photo" className="max-h-64 rounded-xl object-contain" />
         ) : (
           <div className="space-y-1">
             <div className="text-3xl">📷</div>
-            <div className="font-medium">Kéo thả ảnh damage vào đây</div>
-            <div className="text-sm text-slate-500">hoặc bấm để chọn — JPG/PNG, tự nén xuống {MAX_SIZE_MB}MB</div>
+            <div className="font-medium">Drag and drop a damage photo here</div>
+            <div className="text-sm text-slate-500">or click to browse — JPG/PNG, auto-compressed to {MAX_SIZE_MB}MB</div>
           </div>
         )}
       </div>
@@ -94,7 +94,7 @@ export function PhotoUpload({
             {file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB
           </span>
           <button type="button" onClick={() => onChange(null)} className="text-red-400 hover:underline">
-            Xoá
+            Remove
           </button>
         </div>
       )}

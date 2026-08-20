@@ -4,23 +4,23 @@ import { Providers } from './providers';
 import { SiteHeader } from '@/components/SiteHeader';
 import './globals.css';
 
-const inter = Inter({ subsets: ['latin', 'vietnamese'], variable: '--font-sans' });
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'ClaimBot — Bảo hiểm xe máy 90 giây',
+  title: 'ClaimBot — Motorbike insurance in 90 seconds',
   description:
-    'Nộp claim bảo hiểm xe máy trong 90 giây. 4 AI agent verify, estimate và judge tự động. Payout USDC on-chain trên Ethereum Sepolia.',
+    'File a motorbike insurance claim in 90 seconds. Four AI agents verify, estimate and judge automatically. USDC payout settles on-chain on Ethereum Sepolia.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi" className={inter.variable}>
+    <html lang="en" className={inter.variable}>
       <body className="min-h-screen">
         <Providers>
           <SiteHeader />
           <main className="mx-auto max-w-6xl px-5 py-10">{children}</main>
           <footer className="border-t border-white/10 py-8 text-center text-xs text-slate-600">
-            ClaimBot · MVP trên Ethereum Sepolia · Sẽ migrate lên Rialo khi mainnet public
+            ClaimBot · MVP on Ethereum Sepolia · Migrating to Rialo once mainnet is public
           </footer>
         </Providers>
       </body>

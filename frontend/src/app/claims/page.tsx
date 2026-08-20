@@ -27,27 +27,27 @@ export default function ClaimsPage() {
 
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Claim của tôi</h1>
-          <p className="mt-2 text-slate-400">Trạng thái tự cập nhật mỗi 5 giây.</p>
+          <h1 className="text-3xl font-bold">My claims</h1>
+          <p className="mt-2 text-slate-400">Status refreshes every 5 seconds.</p>
         </div>
         <Link href="/claims/new" className="btn-primary">
-          Nộp claim mới
+          File a new claim
         </Link>
       </header>
 
       {!isConnected ? (
-        <EmptyState title="Chưa kết nối ví" description="Kết nối ví để xem các claim đã nộp." />
+        <EmptyState title="Wallet not connected" description="Connect your wallet to see the claims you have filed." />
       ) : isLoading ? (
         <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Spinner /> Đang tải claim…
+          <Spinner /> Loading claims…
         </div>
       ) : claims.length === 0 ? (
         <EmptyState
-          title="Chưa có claim nào"
-          description="Khi xe bị va chạm, chụp ảnh và nộp claim — AI sẽ xử lý trong khoảng 90 giây."
+          title="No claims yet"
+          description="After a crash, photograph the damage and file a claim — the AI pipeline handles it in about 90 seconds."
           action={
             <Link href="/claims/new" className="btn-primary">
-              Nộp claim đầu tiên
+              File your first claim
             </Link>
           }
         />
@@ -69,7 +69,7 @@ export default function ClaimsPage() {
                   </span>
                 </div>
                 <p className="mt-1 truncate text-sm text-slate-500">
-                  {claim.description || 'Không có mô tả'}
+                  {claim.description || 'No description'}
                 </p>
               </div>
 
@@ -80,7 +80,7 @@ export default function ClaimsPage() {
                   <div className="text-sm text-slate-500">Policy #{String(claim.policyId)}</div>
                 )}
                 <div className="text-xs text-slate-600">
-                  {new Date(Number(claim.submittedAt) * 1000).toLocaleDateString('vi-VN')}
+                  {new Date(Number(claim.submittedAt) * 1000).toLocaleDateString('en-US')}
                 </div>
               </div>
             </Link>

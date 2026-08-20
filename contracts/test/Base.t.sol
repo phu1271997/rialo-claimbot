@@ -63,7 +63,7 @@ abstract contract BaseTest is Test {
 
     function _submitClaim(address who, uint256 policyId) internal returns (uint256 claimId) {
         vm.prank(who);
-        claimId = registry.submitClaim(policyId, "ipfs://QmEvidence", "Va cham nhe tai nga tu");
+        claimId = registry.submitClaim(policyId, "ipfs://QmEvidence", "Minor collision at a junction");
     }
 
     function _signVerdict(

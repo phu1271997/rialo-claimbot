@@ -15,24 +15,24 @@ export interface ExtractedData {
   scene_description: string;
 }
 
-const SYSTEM_PROMPT = `Bạn là chuyên viên giám định bảo hiểm xe tại Việt Nam với 15 năm kinh nghiệm.
-Phân tích ảnh damage được cung cấp và trả về JSON đúng schema. Chú ý:
-- Nếu ảnh không phải xe → vehicle_type = "unknown" và confidence = 0
-- Nếu phát hiện dấu hiệu chỉnh sửa ảnh, chụp lại màn hình → thêm vào red_flags
-- Severity dựa trên số part hư + độ hư
-- Chỉ trả JSON, không markdown, không giải thích thêm`;
+const SYSTEM_PROMPT = `You are a vehicle insurance loss adjuster in Vietnam with 15 years of experience.
+Analyse the damage photo provided and return JSON matching the schema exactly. Rules:
+- If the image is not a vehicle, set vehicle_type = "unknown" and confidence = 0
+- If you see signs of photo editing or a re-photographed screen, add them to red_flags
+- Severity follows the number of damaged parts and how badly they are damaged
+- Return JSON only. No markdown, no explanation.`;
 
-const USER_PROMPT = `Phân tích ảnh này và trả về JSON theo schema:
+const USER_PROMPT = `Analyse this photo and return JSON matching this schema:
 {
   "vehicle_type": "motorbike|car|unknown",
-  "license_plate": "biển số hoặc null",
+  "license_plate": "the plate number, or null",
   "damage_locations": ["front"|"rear"|"left"|"right"|"top"],
   "affected_parts": ["bumper"|"headlight"|"mirror"|"door"|"windshield"|"fender"|"seat"|"handlebar"|"exhaust"],
   "severity": "minor|moderate|severe",
   "confidence": 0-100,
-  "red_flags": ["ảnh chỉnh sửa", "damage không nhất quán", ...],
+  "red_flags": ["edited photo", "damage is inconsistent", ...],
   "image_quality": "good|blurry|edited_suspected",
-  "scene_description": "mô tả ngắn cảnh trong ảnh"
+  "scene_description": "short description of the scene in the photo"
 }`;
 
 const VEHICLE_TYPES = new Set(['motorbike', 'car', 'unknown']);
@@ -76,7 +76,7 @@ const MOCK_RESULT: ExtractedData = {
   confidence: 87,
   red_flags: [],
   image_quality: 'good',
-  scene_description: 'Xe máy đỗ bên đường, đèn trước vỡ và gương trái gãy, mặt đường khô.',
+  scene_description: 'Motorbike parked at the roadside, broken headlight and snapped left mirror, dry road surface.',
 };
 
 export async function extractorAgent(evidenceIPFS: string): Promise<ExtractedData> {

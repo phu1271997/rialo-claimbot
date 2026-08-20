@@ -20,7 +20,7 @@ export function useSubmitClaim() {
   const submit = useCallback(
     async (policyId: bigint, file: File, description: string) => {
       if (!publicClient) {
-        setError('Chưa kết nối được mạng Sepolia');
+        setError('Not connected to the Sepolia network');
         setStep('error');
         return;
       }
@@ -33,7 +33,7 @@ export function useSubmitClaim() {
         const res = await fetch('/api/upload', { method: 'POST', body });
         const payload = (await res.json()) as { ipfsHash?: string; error?: string };
         if (!res.ok || !payload.ipfsHash) {
-          throw new Error(payload.error ?? 'Upload ảnh lên IPFS thất bại');
+          throw new Error(payload.error ?? 'Failed to upload the photo to IPFS');
         }
 
         setStep('submitting');

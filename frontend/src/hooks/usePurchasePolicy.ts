@@ -27,7 +27,7 @@ export function usePurchasePolicy() {
   const purchase = useCallback(
     async (tierId: number, premium: bigint, plate: string) => {
       if (!address || !publicClient) {
-        setError('Vui lòng kết nối ví trước');
+        setError('Connect your wallet first');
         setStep('error');
         return;
       }
@@ -83,13 +83,13 @@ export function usePurchasePolicy() {
 
 export function humanizeError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
-  if (/User rejected|user denied|UserRejected/i.test(message)) return 'Bạn đã huỷ giao dịch';
-  if (/insufficient funds/i.test(message)) return 'Ví không đủ ETH để trả gas';
-  if (/InvalidTier/.test(message)) return 'Gói bảo hiểm không hợp lệ';
-  if (/PolicyNotActive/.test(message)) return 'Policy đã hết hiệu lực hoặc hết hạn mức';
-  if (/NotClaimant/.test(message)) return 'Bạn không phải chủ policy này';
+  if (/User rejected|user denied|UserRejected/i.test(message)) return 'You cancelled the transaction';
+  if (/insufficient funds/i.test(message)) return 'Not enough ETH in your wallet to cover gas';
+  if (/InvalidTier/.test(message)) return 'That plan is not valid';
+  if (/PolicyNotActive/.test(message)) return 'This policy has expired or used up its coverage';
+  if (/NotClaimant/.test(message)) return 'You are not the holder of this policy';
   if (/transfer amount exceeds balance|ERC20InsufficientBalance/i.test(message))
-    return 'Số dư USDC không đủ. Lấy test USDC tại faucet.circle.com';
+    return 'Not enough USDC. Get test USDC at faucet.circle.com';
   // Contract reverts arrive as a wall of ABI data; keep only the first line.
-  return message.split('\n')[0]?.slice(0, 200) ?? 'Giao dịch thất bại';
+  return message.split('\n')[0]?.slice(0, 200) ?? 'Transaction failed';
 }

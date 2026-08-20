@@ -175,7 +175,7 @@ refunds the claim if the backend dies. On Rialo this layer disappears entirely.
 
 ## Status
 
-- Contracts: 51 Foundry tests, 97% line coverage
+- Contracts: 59 Foundry tests, 97% line coverage
 - Backend: 26 Vitest tests, full pipeline verified end-to-end against Anvil
 - Frontend: builds clean, all routes render
 

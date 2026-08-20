@@ -42,7 +42,7 @@ contract FullFlowTest is BaseTest {
         uint256 policyId = _buyPolicy(alice, 0);
         uint256 claimId = _submitClaim(alice, policyId);
 
-        string memory reasoning = "REJECT: Red flags: anh chinh sua";
+        string memory reasoning = "REJECT: Red flags: edited photo";
         bytes memory sig = _signVerdict(claimId, false, 0, 30, reasoning, oraclePk);
 
         uint256 aliceBefore = usdc.balanceOf(alice);

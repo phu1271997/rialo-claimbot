@@ -19,7 +19,7 @@ export default function ClaimDetailPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <ConfigNotice />
       {claimId === undefined ? (
-        <div className="card p-6 text-sm text-slate-400">Claim id không hợp lệ.</div>
+        <div className="card p-6 text-sm text-slate-400">Invalid claim id.</div>
       ) : (
         <ClaimStatusTracker claimId={claimId} />
       )}

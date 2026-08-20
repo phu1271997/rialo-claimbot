@@ -70,15 +70,15 @@ export function toPolicy(tuple: readonly unknown[] | undefined): Policy | undefi
 }
 
 export const STATUS_LABELS: Record<ClaimStatus, string> = {
-  [ClaimStatus.Submitted]: 'Đã nộp',
-  [ClaimStatus.Extracting]: 'Phân tích ảnh',
-  [ClaimStatus.Verifying]: 'Xác minh',
-  [ClaimStatus.Estimating]: 'Ước tính chi phí',
-  [ClaimStatus.Judged]: 'Judge quyết định',
-  [ClaimStatus.Paid]: 'Đã thanh toán',
-  [ClaimStatus.Rejected]: 'Bị từ chối',
-  [ClaimStatus.Refunded]: 'Hoàn phí (quá hạn)',
-  [ClaimStatus.Disputed]: 'Đang tranh chấp',
+  [ClaimStatus.Submitted]: 'Submitted',
+  [ClaimStatus.Extracting]: 'Reading photo',
+  [ClaimStatus.Verifying]: 'Verifying',
+  [ClaimStatus.Estimating]: 'Estimating cost',
+  [ClaimStatus.Judged]: 'Judging',
+  [ClaimStatus.Paid]: 'Paid',
+  [ClaimStatus.Rejected]: 'Rejected',
+  [ClaimStatus.Refunded]: 'Refunded (expired)',
+  [ClaimStatus.Disputed]: 'Disputed',
 };
 
 export function isTerminal(status: ClaimStatus): boolean {

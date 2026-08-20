@@ -13,7 +13,7 @@ const extracted = (over: Partial<ExtractedData> = {}): ExtractedData => ({
   confidence: 90,
   red_flags: [],
   image_quality: 'good',
-  scene_description: 'Xe máy hư đèn trước',
+  scene_description: 'Motorbike with a broken headlight',
   ...over,
 });
 
@@ -31,7 +31,7 @@ const estimated = (over: Partial<EstimatedCost> = {}): EstimatedCost => ({
   max_cost_vnd: 1_200_000,
   recommended_payout_vnd: 750_000,
   recommended_payout_usdc: 30_000,
-  reasoning: 'Giá hợp lý theo mặt bằng phụ tùng.',
+  reasoning: 'Reasonable against prevailing parts prices.',
   parts_breakdown: [{ part: 'headlight', cost: 500_000 }],
   ...over,
 });
@@ -47,7 +47,7 @@ describe('judgeAgent', () => {
 
   it('rejects on any red flag before anything else', () => {
     const v = judgeAgent({
-      extracted: extracted({ red_flags: ['ảnh chỉnh sửa'] }),
+      extracted: extracted({ red_flags: ['edited photo'] }),
       verified: verified(),
       estimated: estimated(),
     });
@@ -72,13 +72,16 @@ describe('judgeAgent', () => {
       estimated: estimated(),
     });
     expect(v.approved).toBe(false);
-    expect(v.reasoning).toContain('chỉnh sửa');
+    expect(v.reasoning).toContain('signs of editing');
   });
 
   it('rejects below the cross-check threshold', () => {
     const v = judgeAgent({
       extracted: extracted(),
-      verified: verified({ cross_check_score: MIN_CROSS_CHECK_SCORE - 1, issues: ['Biển số không tồn tại trong DMV'] }),
+      verified: verified({
+        cross_check_score: MIN_CROSS_CHECK_SCORE - 1,
+        issues: ['Plate not found in the DMV registry'],
+      }),
       estimated: estimated(),
     });
     expect(v.approved).toBe(false);
@@ -122,7 +125,7 @@ describe('judgeAgent', () => {
     });
     expect(v.approved).toBe(true);
     expect(v.amount).toBe(20_000_000n);
-    expect(v.reasoning).toContain('giới hạn');
+    expect(v.reasoning).toContain('Capped');
   });
 
   it('rejects when coverage is fully exhausted', () => {
@@ -133,6 +136,6 @@ describe('judgeAgent', () => {
       remainingCoverage: 0n,
     });
     expect(v.approved).toBe(false);
-    expect(v.reasoning).toContain('hạn mức');
+    expect(v.reasoning).toContain('coverage is fully exhausted');
   });
 });

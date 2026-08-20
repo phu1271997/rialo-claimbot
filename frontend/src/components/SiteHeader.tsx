@@ -6,9 +6,9 @@ import { cn } from '@/lib/cn';
 import { WalletConnect } from './WalletConnect';
 
 const NAV = [
-  { href: '/policies', label: 'Gói bảo hiểm' },
-  { href: '/claims/new', label: 'Nộp claim' },
-  { href: '/claims', label: 'Claim của tôi' },
+  { href: '/policies', label: 'Plans' },
+  { href: '/claims/new', label: 'File a claim' },
+  { href: '/claims', label: 'My claims' },
 ];
 
 export function SiteHeader() {

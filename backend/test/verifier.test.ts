@@ -11,7 +11,7 @@ const base: ExtractedData = {
   confidence: 88,
   red_flags: [],
   image_quality: 'good',
-  scene_description: 'Mặt đường khô',
+  scene_description: 'Dry road surface',
 };
 
 describe('verifierAgent', () => {
@@ -30,7 +30,7 @@ describe('verifierAgent', () => {
   it('penalises an unreadable plate', async () => {
     const result = await verifierAgent({ ...base, license_plate: null }, 'ipfs://QmTest');
     expect(result.dmv_check).toBeNull();
-    expect(result.issues).toContain('Không đọc được biển số từ ảnh');
+    expect(result.issues).toContain('Could not read a plate number from the photo');
     expect(result.cross_check_score).toBe(75);
   });
 
@@ -38,8 +38,8 @@ describe('verifierAgent', () => {
     // Ends in 1 -> invalid in the mock DMV, which also implies no active insurance.
     const result = await verifierAgent({ ...base, license_plate: '51-A1-2341' }, 'ipfs://QmTest');
     expect(result.dmv_check?.plate_valid).toBe(false);
-    expect(result.issues).toContain('Biển số không tồn tại trong DMV');
-    expect(result.issues).toContain('Không có bảo hiểm active');
+    expect(result.issues).toContain('Plate not found in the DMV registry');
+    expect(result.issues).toContain('No active insurance on record');
     expect(result.cross_check_score).toBe(30);
   });
 
@@ -51,7 +51,7 @@ describe('verifierAgent', () => {
 
   it('flags a missing EXIF timestamp as an issue without scoring it', async () => {
     const result = await verifierAgent(base, 'ipfs://QmTest');
-    expect(result.issues).toContain('Ảnh không có EXIF timestamp');
+    expect(result.issues).toContain('Photo has no EXIF timestamp');
     expect(result.exif.suspicious).toBe(false);
   });
 });

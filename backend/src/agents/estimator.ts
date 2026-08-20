@@ -12,7 +12,7 @@ export interface EstimatedCost {
   parts_breakdown: { part: string; cost: number }[];
 }
 
-/** Rough VN aftermarket part + labour ranges, in VND. */
+/** Rough Vietnamese aftermarket part + labour ranges, in VND. */
 const PART_PRICES_VND: Record<string, [number, number]> = {
   headlight: [200_000, 800_000],
   mirror: [100_000, 400_000],
@@ -72,19 +72,19 @@ export async function estimatorAgent(extracted: ExtractedData): Promise<Estimate
   const { minTotal, maxTotal, midpoint, breakdown } = ruleBasedEstimate(extracted);
 
   let finalVnd = midpoint;
-  let reasoning = `Ước tính theo bảng giá phụ tùng cho ${breakdown.length} bộ phận, mức độ hư hỏng ${extracted.severity}.`;
+  let reasoning = `Priced from the parts table across ${breakdown.length} part(s), damage severity ${extracted.severity}.`;
 
   if (config.MOCK_AI) {
     logger.warn('MOCK_AI enabled — estimator skipping LLM sanity check');
   } else {
     try {
-      const prompt = `Cost estimation cho damage xe máy tại Việt Nam:
-Parts: ${extracted.affected_parts.join(', ') || '(không có)'}
+      const prompt = `Repair cost estimate for motorbike damage in Vietnam:
+Parts: ${extracted.affected_parts.join(', ') || '(none)'}
 Severity: ${extracted.severity}
-Rule-based estimate: ${midpoint.toLocaleString('vi-VN')} VND (range ${minTotal.toLocaleString('vi-VN')} - ${maxTotal.toLocaleString('vi-VN')})
+Rule-based estimate: ${midpoint.toLocaleString('en-US')} VND (range ${minTotal.toLocaleString('en-US')} - ${maxTotal.toLocaleString('en-US')})
 
-Xác nhận số này hợp lý hay không, và viết reasoning ngắn (2 câu, tiếng Việt).
-Chỉ trả JSON, không markdown: {"looks_reasonable": true|false, "adjusted_vnd": number, "reasoning": "..."}`;
+Say whether this figure is reasonable, then write a short reasoning (2 sentences, English).
+Return JSON only, no markdown: {"looks_reasonable": true|false, "adjusted_vnd": number, "reasoning": "..."}`;
 
       const response = await requireAnthropic().messages.create({
         model: MODEL,

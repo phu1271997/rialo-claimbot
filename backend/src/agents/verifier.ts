@@ -19,8 +19,8 @@ export interface VerifiedData {
   issues: string[];
 }
 
-const WET_SCENE = /mưa|ướt|wet|rain|puddle|vũng nước/i;
-const RAINY_CONDITIONS = /rain|drizzle|thunderstorm|mưa/i;
+const WET_SCENE = /wet|rain|puddle|damp|soaked/i;
+const RAINY_CONDITIONS = /rain|drizzle|thunderstorm/i;
 
 /** Penalty weights. DMV validity dominates because it is the only hard identity signal. */
 const PENALTY = {
@@ -44,20 +44,20 @@ export async function verifierAgent(
     try {
       dmv = await checkVehicle(extracted.license_plate);
       if (!dmv.plate_valid) {
-        issues.push('Biển số không tồn tại trong DMV');
+        issues.push('Plate not found in the DMV registry');
         score -= PENALTY.plateInvalid;
       }
       if (!dmv.active_insurance) {
-        issues.push('Không có bảo hiểm active');
+        issues.push('No active insurance on record');
         score -= PENALTY.noActiveInsurance;
       }
     } catch (err) {
       logger.warn({ err: String(err) }, 'DMV lookup failed');
-      issues.push('DMV API error');
+      issues.push('DMV lookup failed');
       score -= PENALTY.plateInvalid;
     }
   } else {
-    issues.push('Không đọc được biển số từ ảnh');
+    issues.push('Could not read a plate number from the photo');
     score -= PENALTY.plateUnreadable;
   }
 
@@ -75,9 +75,9 @@ export async function verifierAgent(
   // Missing EXIF alone is not suspicious: messaging apps routinely strip it.
   const suspicious = futureTimestamp;
 
-  if (!exif.timestamp) issues.push('Ảnh không có EXIF timestamp');
+  if (!exif.timestamp) issues.push('Photo has no EXIF timestamp');
   if (futureTimestamp) {
-    issues.push('EXIF timestamp nằm trong tương lai');
+    issues.push('EXIF timestamp is in the future');
     score -= PENALTY.exifSuspicious;
   }
 
@@ -92,7 +92,7 @@ export async function verifierAgent(
 
       weather = { temp: reading.temp, conditions: reading.conditions, matches_scene: matches };
       if (!matches) {
-        issues.push('Cảnh trong ảnh không khớp thời tiết thực tế');
+        issues.push('Scene in the photo does not match the recorded weather');
         score -= PENALTY.weatherMismatch;
       }
     } catch (err) {

@@ -41,25 +41,25 @@ export function judgeAgent(input: JudgeInput): Verdict {
   }
 
   if (extracted.vehicle_type === 'unknown') {
-    return reject('REJECT: Không xác định được loại xe trong ảnh');
+    return reject('REJECT: Could not identify the vehicle type in the photo');
   }
 
   if (extracted.image_quality === 'edited_suspected') {
-    return reject('REJECT: Ảnh có dấu hiệu bị chỉnh sửa');
+    return reject('REJECT: Photo shows signs of editing');
   }
 
   if (verified.cross_check_score < MIN_CROSS_CHECK_SCORE) {
     return reject(
-      `REJECT: Verification score thấp (${verified.cross_check_score}/100). Issues: ${verified.issues.join('; ')}`,
+      `REJECT: Verification score too low (${verified.cross_check_score}/100). Issues: ${verified.issues.join('; ')}`,
     );
   }
 
   if (confidence < MIN_CONFIDENCE) {
-    return reject(`REJECT: Confidence quá thấp (${confidence}/100), cần review thủ công`);
+    return reject(`REJECT: Confidence too low (${confidence}/100), needs manual review`);
   }
 
   if (estimated.recommended_payout_usdc <= 0) {
-    return reject('REJECT: Không ước tính được chi phí sửa chữa');
+    return reject('REJECT: Could not estimate a repair cost');
   }
 
   // Clamp to remaining coverage so the on-chain AmountExceedsCoverage revert
@@ -72,14 +72,14 @@ export function judgeAgent(input: JudgeInput): Verdict {
   }
 
   if (amount <= 0n) {
-    return reject('REJECT: Policy đã dùng hết hạn mức bồi thường');
+    return reject('REJECT: Policy coverage is fully exhausted');
   }
 
   const reasoning = [
     `APPROVED (confidence ${confidence}%).`,
     `Damage: ${extracted.severity}, parts: ${extracted.affected_parts.join(', ') || 'n/a'}.`,
-    `Estimated: ${estimated.recommended_payout_vnd.toLocaleString('vi-VN')} VND.`,
-    capped ? 'Đã giới hạn theo hạn mức còn lại của policy.' : '',
+    `Estimated: ${estimated.recommended_payout_vnd.toLocaleString('en-US')} VND.`,
+    capped ? 'Capped at the policy remaining coverage.' : '',
     estimated.reasoning,
   ]
     .filter(Boolean)

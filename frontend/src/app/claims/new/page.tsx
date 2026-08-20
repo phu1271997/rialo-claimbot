@@ -37,25 +37,25 @@ export default function NewClaimPage() {
       <ConfigNotice />
 
       <header>
-        <h1 className="text-3xl font-bold">Nộp claim mới</h1>
+        <h1 className="text-3xl font-bold">File a new claim</h1>
         <p className="mt-2 text-slate-400">
-          Ảnh được nén và lưu lên IPFS, sau đó 4 AI agent xử lý trong khoảng 60–90 giây.
+          Your photo is compressed and pinned to IPFS, then four AI agents process it in roughly 60–90 seconds.
         </p>
       </header>
 
       {!isConnected ? (
-        <EmptyState title="Chưa kết nối ví" description="Kết nối ví để xem policy và nộp claim." />
+        <EmptyState title="Wallet not connected" description="Connect your wallet to see your policies and file a claim." />
       ) : isLoading ? (
         <div className="flex items-center gap-2 text-sm text-slate-400">
-          <Spinner /> Đang tải policy…
+          <Spinner /> Loading policies…
         </div>
       ) : activePolicies.length === 0 ? (
         <EmptyState
-          title="Chưa có policy đang hiệu lực"
-          description="Bạn cần mua gói bảo hiểm trước khi nộp claim."
+          title="No active policy"
+          description="You need to buy a plan before you can file a claim."
           action={
             <Link href="/policies" className="btn-primary">
-              Xem gói bảo hiểm
+              View plans
             </Link>
           }
         />
@@ -77,34 +77,34 @@ export default function NewClaimPage() {
               onChange={(e) => setPolicyId(e.target.value)}
               className="field"
             >
-              <option value="">— Chọn policy —</option>
+              <option value="">— Select a policy —</option>
               {activePolicies.map((p) => (
                 <option key={String(p.id)} value={String(p.id)}>
-                  Policy #{String(p.id)} · còn {formatUsdc(p.coverage - p.totalPaidOut)}
+                  Policy #{String(p.id)} · {formatUsdc(p.coverage - p.totalPaidOut)} left
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <span className="label">Ảnh damage</span>
+            <span className="label">Damage photo</span>
             <PhotoUpload file={file} onChange={setFile} />
           </div>
 
           <div>
             <label htmlFor="description" className="label">
-              Mô tả sự cố
+              What happened
             </label>
             <textarea
               id="description"
               rows={4}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="VD: Va chạm nhẹ tại ngã tư Nguyễn Trãi lúc 18h, vỡ đèn trước và gãy gương trái."
+              placeholder="e.g. Minor collision at the Nguyen Trai junction around 6pm — broken headlight and snapped left mirror."
               className="field resize-none"
             />
             <p className="mt-1.5 text-xs text-slate-500">
-              {description.trim().length}/{MIN_DESCRIPTION} ký tự tối thiểu
+              {description.trim().length}/{MIN_DESCRIPTION} characters minimum
             </p>
           </div>
 
@@ -117,15 +117,15 @@ export default function NewClaimPage() {
           <button type="submit" disabled={!ready || busy} className="btn-primary w-full">
             {step === 'uploading' && (
               <>
-                <Spinner /> Đang tải ảnh lên IPFS…
+                <Spinner /> Uploading photo to IPFS…
               </>
             )}
             {step === 'submitting' && (
               <>
-                <Spinner /> Đang ghi claim lên blockchain…
+                <Spinner /> Writing claim to the blockchain…
               </>
             )}
-            {!busy && 'Nộp claim'}
+            {!busy && 'Submit claim'}
           </button>
         </form>
       )}
