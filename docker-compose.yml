@@ -1,0 +1,27 @@
+# Local dev stack: a Sepolia-forked chain plus the orchestrator.
+# Deploy contracts against anvil first, then bring the backend up.
+services:
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--fork-url", "${SEPOLIA_RPC_URL}"]
+    ports:
+      - "8545:8545"
+
+  backend:
+    build: ./backend
+    depends_on:
+      - anvil
+    environment:
+      RPC_URL: http://anvil:8545
+      ORACLE_PRIVATE_KEY: ${ORACLE_PRIVATE_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      MOCK_AI: ${MOCK_AI:-false}
+      PINATA_JWT: ${PINATA_JWT}
+      PINATA_GATEWAY: ${PINATA_GATEWAY:-https://gateway.pinata.cloud}
+      OPENWEATHER_KEY: ${OPENWEATHER_KEY}
+      ADMIN_API_KEY: ${ADMIN_API_KEY}
+      CLAIM_REGISTRY_ADDRESS: ${CLAIM_REGISTRY_ADDRESS}
+      POLICY_MANAGER_ADDRESS: ${POLICY_MANAGER_ADDRESS}
+      LOG_LEVEL: debug
+    ports:
+      - "4000:4000"
