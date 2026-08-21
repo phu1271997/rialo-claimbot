@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/cn';
+import { Logo } from './Logo';
 import { WalletConnect } from './WalletConnect';
 
 const NAV = [
@@ -17,8 +18,11 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-ink-950/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-6 px-5 py-3.5">
-        <Link href="/" className="flex items-center gap-2 font-bold tracking-tight">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-ink-950">C</span>
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 font-bold tracking-tight transition hover:opacity-80"
+        >
+          <Logo size={30} />
           <span>ClaimBot</span>
         </Link>
 

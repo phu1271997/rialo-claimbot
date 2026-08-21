@@ -1,0 +1,12 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ClaimBot">
+  <!-- Favicon uses the solid badge instead of the seal ring: at 16px the ring
+       closes up, and the silhouette alone still identifies the brand. -->
+  <defs>
+    <linearGradient id="i" x1="5" y1="3" x2="27" y2="29" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#86EFAC"/>
+      <stop offset="0.55" stop-color="#4ADE80"/>
+      <stop offset="1" stop-color="#16A34A"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#i)" fill-rule="evenodd" d="M15.2 2.4A1.6 1.6 0 0 1 16.8 2.4L26.4 7.9A1.6 1.6 0 0 1 27.2 9.3V20.7A1.6 1.6 0 0 1 26.4 22.1L16.8 27.6A1.6 1.6 0 0 1 15.2 27.6L5.6 22.1A1.6 1.6 0 0 1 4.8 20.7V9.3A1.6 1.6 0 0 1 5.6 7.9Z M17.85 7.6 11.35 16.65A0.55 0.55 0 0 0 11.8 17.5H14.7L14.1 22.6A0.55 0.55 0 0 0 15.1 23.0L20.65 14.35A0.55 0.55 0 0 0 20.2 13.5H17.35L18.85 8.1A0.55 0.55 0 0 0 17.85 7.6Z"/>
+</svg>
