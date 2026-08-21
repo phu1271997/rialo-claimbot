@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { estimatorAgent, ruleBasedEstimate, USD_VND_RATE, vndToUsdcSixDecimals } from '../src/agents/estimator.js';
-import type { ExtractedData } from '../src/agents/extractor.js';
+import { estimatorAgent, ruleBasedEstimate, USD_VND_RATE, vndToUsdcSixDecimals } from '@claimbot/pipeline';
+import type { ExtractedData } from '@claimbot/pipeline';
+import { testContext } from './context.js';
 
 const extracted = (over: Partial<ExtractedData> = {}): ExtractedData => ({
   vehicle_type: 'motorbike',
@@ -56,7 +57,7 @@ describe('vndToUsdcSixDecimals', () => {
 
 describe('estimatorAgent (MOCK_AI)', () => {
   it('returns the rule-based midpoint without calling an LLM', async () => {
-    const result = await estimatorAgent(extracted());
+    const result = await estimatorAgent(extracted(), testContext);
     expect(result.recommended_payout_vnd).toBe(750_000);
     expect(result.recommended_payout_usdc).toBe(vndToUsdcSixDecimals(750_000));
     expect(result.parts_breakdown).toHaveLength(2);

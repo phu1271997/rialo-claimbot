@@ -7,10 +7,25 @@ cd "$(dirname "$0")/.."
 [ -f .env ] || { echo "❌ Missing .env"; exit 1; }
 set -a; source .env; set +a
 
+# A raw private key is just 64 hex characters; the 0x prefix is a convention and
+# both forms are valid. Foundry's vm.envUint is the strict one — it only parses
+# hex with the prefix — so normalise here rather than dictating the .env format.
+if [ -n "${DEPLOYER_PRIVATE_KEY:-}" ]; then
+  export DEPLOYER_PRIVATE_KEY="0x${DEPLOYER_PRIVATE_KEY#0x}"
+fi
+if [ -n "${ORACLE_PRIVATE_KEY:-}" ]; then
+  export ORACLE_PRIVATE_KEY="0x${ORACLE_PRIVATE_KEY#0x}"
+fi
+
 fail=0
 
 if [ -z "${DEPLOYER_PRIVATE_KEY:-}" ]; then
   echo "❌ DEPLOYER_PRIVATE_KEY is empty — add it to .env"
+  exit 1
+fi
+
+if ! printf '%s' "$DEPLOYER_PRIVATE_KEY" | grep -qE '^0x[0-9a-fA-F]{64}$'; then
+  echo "❌ DEPLOYER_PRIVATE_KEY is not 64 hex characters"
   exit 1
 fi
 

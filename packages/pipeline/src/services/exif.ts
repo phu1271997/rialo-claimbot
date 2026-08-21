@@ -10,7 +10,7 @@ export interface ExifData {
  * Missing EXIF is normal, not fraud — WhatsApp, Messenger and Zalo all strip it.
  * The verifier treats this as a weak signal only.
  */
-export async function extractEXIF(buf: Buffer): Promise<ExifData> {
+export async function extractEXIF(buf: Uint8Array): Promise<ExifData> {
   try {
     const data = await exifr.parse(buf, { gps: true });
     if (!data) return { timestamp: null, gps: null, device: null };

@@ -3,8 +3,7 @@ import { checkVehicle, type DmvRecord } from '../services/mockDMV.js';
 import { getWeatherAt } from '../services/weather.js';
 import { extractEXIF } from '../services/exif.js';
 import { fetchIPFS } from '../services/ipfs.js';
-import { config } from '../config.js';
-import { logger } from '../utils/logger.js';
+import type { PipelineContext } from '../types.js';
 
 export interface VerifiedData {
   dmv_check: DmvRecord | null;
@@ -34,6 +33,7 @@ const PENALTY = {
 export async function verifierAgent(
   extracted: ExtractedData,
   evidenceIPFS: string,
+  { config, logger }: PipelineContext,
 ): Promise<VerifiedData> {
   const issues: string[] = [];
   let score = 100;
@@ -63,9 +63,9 @@ export async function verifierAgent(
 
   // ── EXIF ──
   let exif = { timestamp: null as number | null, gps: null as { lat: number; lng: number } | null, device: null as string | null };
-  if (!config.MOCK_AI) {
+  if (!config.mockAI) {
     try {
-      exif = await extractEXIF(await fetchIPFS(evidenceIPFS));
+      exif = await extractEXIF(await fetchIPFS(evidenceIPFS, config));
     } catch (err) {
       logger.warn({ err: String(err) }, 'EXIF read failed — treated as missing metadata');
     }
@@ -83,9 +83,9 @@ export async function verifierAgent(
 
   // ── Weather cross-check (bonus signal, only when GPS + time survive) ──
   let weather: VerifiedData['weather_at_scene'] = null;
-  if (exif.gps && exif.timestamp && config.OPENWEATHER_KEY) {
+  if (exif.gps && exif.timestamp && config.openWeatherKey) {
     try {
-      const reading = await getWeatherAt(exif.gps.lat, exif.gps.lng, exif.timestamp);
+      const reading = await getWeatherAt(exif.gps.lat, exif.gps.lng, exif.timestamp, config);
       const sceneLooksWet = WET_SCENE.test(extracted.scene_description);
       const actuallyRained = RAINY_CONDITIONS.test(reading.conditions);
       const matches = sceneLooksWet === actuallyRained;

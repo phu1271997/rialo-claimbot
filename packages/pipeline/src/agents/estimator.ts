@@ -1,6 +1,5 @@
-import { config } from '../config.js';
-import { MODEL, parseJsonBlock, requireAnthropic, textOf } from '../services/anthropic.js';
-import { logger } from '../utils/logger.js';
+import { anthropicClient, parseJsonBlock, textOf } from '../services/anthropic.js';
+import type { PipelineContext } from '../types.js';
 import type { ExtractedData } from './extractor.js';
 
 export interface EstimatedCost {
@@ -68,14 +67,17 @@ interface SanityCheck {
   reasoning: string;
 }
 
-export async function estimatorAgent(extracted: ExtractedData): Promise<EstimatedCost> {
+export async function estimatorAgent(
+  extracted: ExtractedData,
+  { config, logger }: PipelineContext,
+): Promise<EstimatedCost> {
   const { minTotal, maxTotal, midpoint, breakdown } = ruleBasedEstimate(extracted);
 
   let finalVnd = midpoint;
   let reasoning = `Priced from the parts table across ${breakdown.length} part(s), damage severity ${extracted.severity}.`;
 
-  if (config.MOCK_AI) {
-    logger.warn('MOCK_AI enabled — estimator skipping LLM sanity check');
+  if (config.mockAI) {
+    logger.warn({}, 'MOCK_AI enabled — estimator skipping LLM sanity check');
   } else {
     try {
       const prompt = `Repair cost estimate for motorbike damage in Vietnam:
@@ -86,8 +88,8 @@ Rule-based estimate: ${midpoint.toLocaleString('en-US')} VND (range ${minTotal.t
 Say whether this figure is reasonable, then write a short reasoning (2 sentences, English).
 Return JSON only, no markdown: {"looks_reasonable": true|false, "adjusted_vnd": number, "reasoning": "..."}`;
 
-      const response = await requireAnthropic().messages.create({
-        model: MODEL,
+      const response = await anthropicClient(config).messages.create({
+        model: config.anthropicModel,
         max_tokens: 400,
         temperature: 0,
         messages: [{ role: 'user', content: prompt }],

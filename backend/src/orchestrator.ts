@@ -1,26 +1,20 @@
 import type { Log } from 'ethers';
 import { claimRegistry, oracleSigner, policyManager, provider } from './contracts.js';
 import { oracleTxQueue } from './utils/txQueue.js';
-import { extractorAgent } from './agents/extractor.js';
-import { verifierAgent } from './agents/verifier.js';
-import { estimatorAgent } from './agents/estimator.js';
-import { judgeAgent } from './agents/judge.js';
+import {
+  ClaimStatus as Status,
+  estimatorAgent,
+  extractorAgent,
+  judgeAgent,
+  retry,
+  verifierAgent,
+} from '@claimbot/pipeline';
+import { pipelineContext } from './pipelineContext.js';
 import { signVerdict } from './utils/signature.js';
 import { logger } from './utils/logger.js';
-import { retry } from './utils/retry.js';
 import { config } from './config.js';
 
-export enum Status {
-  Submitted = 0,
-  Extracting = 1,
-  Verifying = 2,
-  Estimating = 3,
-  Judged = 4,
-  Paid = 5,
-  Rejected = 6,
-  Refunded = 7,
-  Disputed = 8,
-}
+export { Status };
 
 export interface PipelineRecord {
   claimId: number;
@@ -142,15 +136,24 @@ export async function processClaim(claimId: number, evidenceIPFS: string): Promi
     logger.info({ claimId }, '── pipeline start ──');
 
     await advanceStatus(claimId, Status.Extracting);
-    const extracted = await retry(() => extractorAgent(evidenceIPFS), { label: `extractor:${claimId}` });
+    const extracted = await retry(() => extractorAgent(evidenceIPFS, pipelineContext), {
+      label: `extractor:${claimId}`,
+      logger,
+    });
     logger.info({ claimId, extracted }, 'Extractor done');
 
     await advanceStatus(claimId, Status.Verifying);
-    const verified = await retry(() => verifierAgent(extracted, evidenceIPFS), { label: `verifier:${claimId}` });
+    const verified = await retry(() => verifierAgent(extracted, evidenceIPFS, pipelineContext), {
+      label: `verifier:${claimId}`,
+      logger,
+    });
     logger.info({ claimId, verified }, 'Verifier done');
 
     await advanceStatus(claimId, Status.Estimating);
-    const estimated = await retry(() => estimatorAgent(extracted), { label: `estimator:${claimId}` });
+    const estimated = await retry(() => estimatorAgent(extracted, pipelineContext), {
+      label: `estimator:${claimId}`,
+      logger,
+    });
     logger.info({ claimId, estimated }, 'Estimator done');
 
     await advanceStatus(claimId, Status.Judged);

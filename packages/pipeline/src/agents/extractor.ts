@@ -1,7 +1,6 @@
-import { config } from '../config.js';
-import { MODEL, parseJsonBlock, requireAnthropic, textOf } from '../services/anthropic.js';
-import { detectMediaType, fetchIPFS } from '../services/ipfs.js';
-import { logger } from '../utils/logger.js';
+import { anthropicClient, parseJsonBlock, textOf } from '../services/anthropic.js';
+import { detectMediaType, fetchIPFS, toBase64 } from '../services/ipfs.js';
+import type { PipelineContext } from '../types.js';
 
 export interface ExtractedData {
   vehicle_type: 'motorbike' | 'car' | 'unknown';
@@ -79,17 +78,20 @@ const MOCK_RESULT: ExtractedData = {
   scene_description: 'Motorbike parked at the roadside, broken headlight and snapped left mirror, dry road surface.',
 };
 
-export async function extractorAgent(evidenceIPFS: string): Promise<ExtractedData> {
-  if (config.MOCK_AI) {
+export async function extractorAgent(
+  evidenceIPFS: string,
+  { config, logger }: PipelineContext,
+): Promise<ExtractedData> {
+  if (config.mockAI) {
     logger.warn({ evidenceIPFS }, 'MOCK_AI enabled — extractor returning canned result');
     return MOCK_RESULT;
   }
 
-  const imageData = await fetchIPFS(evidenceIPFS);
+  const imageData = await fetchIPFS(evidenceIPFS, config);
   const mediaType = detectMediaType(imageData);
 
-  const response = await requireAnthropic().messages.create({
-    model: MODEL,
+  const response = await anthropicClient(config).messages.create({
+    model: config.anthropicModel,
     max_tokens: 1024,
     temperature: 0,
     system: SYSTEM_PROMPT,
@@ -99,7 +101,7 @@ export async function extractorAgent(evidenceIPFS: string): Promise<ExtractedDat
         content: [
           {
             type: 'image',
-            source: { type: 'base64', media_type: mediaType, data: imageData.toString('base64') },
+            source: { type: 'base64', media_type: mediaType, data: toBase64(imageData) },
           },
           { type: 'text', text: USER_PROMPT },
         ],

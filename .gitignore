@@ -20,3 +20,5 @@ frontend/next-env.d.ts
 backend/dist/
 
 .vercel
+.env*
+.env.local

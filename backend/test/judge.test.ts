@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { judgeAgent, MIN_CONFIDENCE, MIN_CROSS_CHECK_SCORE } from '../src/agents/judge.js';
-import type { ExtractedData } from '../src/agents/extractor.js';
-import type { VerifiedData } from '../src/agents/verifier.js';
-import type { EstimatedCost } from '../src/agents/estimator.js';
+import { judgeAgent, MIN_CONFIDENCE, MIN_CROSS_CHECK_SCORE } from '@claimbot/pipeline';
+import type { ExtractedData } from '@claimbot/pipeline';
+import type { VerifiedData } from '@claimbot/pipeline';
+import type { EstimatedCost } from '@claimbot/pipeline';
 
 const extracted = (over: Partial<ExtractedData> = {}): ExtractedData => ({
   vehicle_type: 'motorbike',

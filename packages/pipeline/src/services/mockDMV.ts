@@ -1,5 +1,3 @@
-import { sleep } from '../utils/retry.js';
-
 export interface DmvRecord {
   plate_valid: boolean;
   active_insurance: boolean;
@@ -12,7 +10,7 @@ export interface DmvRecord {
  * Production swaps this for the Chainlink Functions call in VehicleVerifier.sol.
  */
 export async function checkVehicle(plate: string): Promise<DmvRecord> {
-  await sleep(300);
+  await new Promise((resolve) => setTimeout(resolve, 300));
 
   const normalized = plate.replace(/[^0-9A-Za-z]/g, '');
   const lastChar = normalized.slice(-1);

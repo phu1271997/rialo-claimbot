@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useClaimStatus } from '@/hooks/useClaimStatus';
+import { useClaimPipeline } from '@/hooks/useClaimPipeline';
 import { ClaimStatus } from '@/types/claim';
 import { formatDeadline, formatUsdc, usdcToVnd } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -18,6 +19,7 @@ const STEPS = [
 
 export function ClaimStatusTracker({ claimId }: { claimId: bigint }) {
   const { claim, isLoading } = useClaimStatus(claimId);
+  useClaimPipeline(claimId, claim?.status);
 
   if (isLoading && !claim) {
     return (
@@ -56,7 +58,9 @@ export function ClaimStatusTracker({ claimId }: { claimId: bigint }) {
             // A rejected or refunded claim stops wherever it stopped; only the
             // paid path lights up the final step.
             const done = status > step.id || paid;
-            const active = status === step.id && !rejected && !refunded;
+            // A paid claim has finished its last step, so it must not also render
+            // as the in-progress one — `done` and `active` are mutually exclusive.
+            const active = status === step.id && !done && !rejected && !refunded;
             const halted = (rejected || refunded) && step.id >= status;
 
             return (
