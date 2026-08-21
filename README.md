@@ -28,6 +28,25 @@ world on their own. See [Why this exists](#why-this-exists).
 4. The signed verdict goes on-chain. If approved, `PayoutVault` transfers USDC to the rider.
 5. If the pipeline never finishes, Chainlink Automation refunds the claim at the 48h deadline.
 
+## Live deployment
+
+Contracts are live on **Ethereum Sepolia**, verified on Etherscan:
+
+| Contract | Address |
+|---|---|
+| PolicyManager | [`0x06E1000f17ed4df83940A0b403D69D292188F2b0`](https://sepolia.etherscan.io/address/0x06E1000f17ed4df83940A0b403D69D292188F2b0#code) |
+| ClaimRegistry | [`0x5B67353D25817f5A58415EDA386c98eF9d7a1B08`](https://sepolia.etherscan.io/address/0x5B67353D25817f5A58415EDA386c98eF9d7a1B08#code) |
+| PayoutVault | [`0xd898EF839DE88dE38113f0560F8fEBEff73D09c8`](https://sepolia.etherscan.io/address/0xd898EF839DE88dE38113f0560F8fEBEff73D09c8#code) |
+| ClaimAutomation | [`0x9A39788df5d93b3b868b13BBa67434b116a938AA`](https://sepolia.etherscan.io/address/0x9A39788df5d93b3b868b13BBa67434b116a938AA#code) |
+| USDC (Circle test) | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) |
+
+Frontend: **https://rialo-claimbot.vercel.app**
+
+The backend orchestrator is not hosted yet, so a submitted claim stays in
+`Submitted` until an oracle process picks up the event. Everything up to that
+point — buying a policy, uploading evidence, writing the claim on-chain — works
+from the deployed frontend today.
+
 ## Repository layout
 
 ```
