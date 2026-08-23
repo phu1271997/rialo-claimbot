@@ -1,836 +1,1025 @@
-# Build Guide — AI-Adjudicated On-Chain Settlement App (Sepolia)
+# Build Guide — Ship a Rialo-Thesis dApp on Ethereum Sepolia
 
 > **How to use this file**
-> Paste it into an AI coding assistant (Claude Code, Cursor, etc.) as the project
-> spec. Read it start to finish before writing code, then build in the phase
-> order given. Each phase ends with a verification step — do not move on until it
-> passes.
+> Paste it into an AI coding assistant (Claude Code, Cursor, Copilot) as the
+> project brief. Read Part 1–3 to decide *what* to build, then follow Part 4–7 to
+> build, deploy and publish it.
+>
+> This guide does not prescribe one product. It teaches you to pick a project
+> that showcases what Rialo is for, then build it on Sepolia in a way that makes
+> the argument measurable.
 
 ---
 
-## 0. What you are building
+# PART 1 — What Rialo is
 
-A web application where a user submits a **request with evidence**, a chain of
-**AI agents evaluates it**, and a **signed verdict settles on-chain** by moving
-tokens to the user automatically.
+## 1.1 The one-paragraph version
 
-The domain is yours to choose. The pattern fits any of these:
+**Rialo** is a new Layer 1 blockchain built by **Subzero Labs** so that smart
+contracts can reach the real world **directly** — call an HTTPS API, wake
+themselves on a timer, react to events, handle private data — all native in the
+protocol, with no oracle, keeper bot, indexer or bridge in between.
 
-| Domain | Request | Evidence | Payout |
-|---|---|---|---|
-| Micro-insurance | Damage claim | Photo of damage | Repair cost |
-| Bug bounty | Vulnerability report | PoC + logs | Bounty tier |
-| Grant milestone | Milestone completion | Repo diff + demo | Milestone amount |
-| Freelance escrow | Work delivered | Deliverable files | Contract amount |
-| Warranty | Product defect | Photo + receipt | Refund |
+Its founding claim is not about speed. It is that crypto developers spend roughly
+**90% of their time gluing middleware together and 10% writing the product**, and
+that this — not TPS — is why crypto has millions of users while Web2 apps have
+billions.
 
-Pick **one** and stay with it. This guide uses neutral names —
-`Request`, `Evidence`, `Verdict`, `Payout` — substitute your own.
+## 1.2 Who is behind it
 
-### The core loop
-
-```
-User buys/opens an agreement  →  deposits are escrowed on-chain
-        ↓
-User submits a request + evidence (evidence pinned to IPFS)
-        ↓
-Off-chain agents run in sequence:
-   Extractor  → structured data out of unstructured evidence
-   Verifier   → cross-check that data against external sources
-   Estimator  → compute the amount owed
-   Judge      → aggregate, apply rules, produce a signed verdict
-        ↓
-Verdict submitted on-chain with a signature
-        ↓
-Approved → tokens transfer to the user
-Rejected → reason stored on-chain
-No verdict before the deadline → automatic refund
-```
-
-### Non-negotiable properties
-
-1. **The contract is the source of truth.** The UI never shows a state the chain
-   does not have.
-2. **The verdict is signed.** The contract verifies the signature before moving
-   money.
-3. **The contract caps the payout.** Even a compromised agent cannot exceed the
-   agreement's remaining coverage.
-4. **There is a deadline fallback.** If the agents never respond, the user is not
-   stuck forever.
-
----
-
-## 1. Why this is built on Sepolia, and what it demonstrates
-
-Rialo is a Layer 1 designed so smart contracts can reach the real world
-directly. Its network is not public yet, so this project is built on **Ethereum
-Sepolia** using workarounds — and the workarounds *are the point*.
-
-Build it so the contrast is measurable:
-
-| Rialo capability | What you must build on Sepolia instead |
+| | |
 |---|---|
-| **Native webcalls** — a contract calls an HTTPS API in one line | A Chainlink Functions consumer contract, a funded subscription, LINK, CBOR-encoded request payloads, and manual consumer registration — all to make one GET request |
-| **Native timers / reactive transactions** — a contract sleeps and wakes itself | A Chainlink Automation-compatible contract, a registered upkeep, and a LINK balance — all to fire one deadline |
-| **On-chain reactive execution** — logic runs when an event occurs | A Node.js service polling for events 24/7, plus nonce management and crash recovery |
-| **SCALE** — trustless agent payment with escrow, deadline, and quality judging | An off-chain signer holding a privileged role — the one real trust hole in the design |
-| **Real-world identity** — email/SMS login | Wallet, seed phrase, and the user funding their own gas |
-| **Configurable privacy** | Manual hashing of identifiers; evidence sits on public IPFS |
+| Company | Subzero Labs |
+| CEO | Ade Adepoju (ex-Netflix, distributed systems) |
+| Team from | Meta, Google, Netflix, Apple, Amazon, Uber, Robinhood, Solana, Near, EigenLayer, Diem, Parity, Magic Eden |
+| Funding | $20M seed (announced 1 Aug 2025), led by **Pantera Capital** |
+| Co-investors | Coinbase Ventures, Susquehanna, Variant, Hashed, Mirana, Fabric, Edge Capital, Mysten Labs |
+| TradFi partners | **Nasdaq, NYSE, CBOE**, plus Predicate, DoubleZero, M0, Keplr |
+| Status | Private DevNet. Public testnet and mainnet not yet released. RLO token not launched. |
 
-**Instrument this.** At the end, count the lines that exist only because of
-middleware versus the lines that serve the user. A typical result is that
-**over half the codebase is scaffolding**. That number is the deliverable.
+Susquehanna (a top-tier HFT firm) and three of the world's largest exchanges
+signing on is the signal that Rialo is aiming at **institutional finance**, not
+just retail crypto.
 
-Keep the agent pipeline in its own package with **zero Chainlink imports**, so a
-future migration replaces only the outer layer.
+## 1.3 The philosophy: supermodularity
 
----
+Crypto has argued for years between **modular** (split the chain into layers) and
+**monolithic** (keep it all in one). Rialo rejects both framings and proposes
+**supermodularity**:
 
-## 2. Tech stack
+> Integrate into the base layer only the primitives whose value **increases** when
+> combined with the others.
 
-| Layer | Choice | Notes |
-|---|---|---|
-| Contracts | Solidity `^0.8.24`, **Foundry** | Not Hardhat |
-| Contract libs | OpenZeppelin `v5.0.2`, Chainlink contracts `1.2.0` | See §11 for the tag-name trap |
-| Shared agent pipeline | TypeScript, ESM, npm workspace package | No framework |
-| LLM | Anthropic SDK (vision-capable model) | Any provider works; keep it behind one module |
-| Backend service | Node 20+, Express, ethers v6 | Long-running event listener |
-| Frontend | Next.js 14 App Router, TypeScript | |
-| Wallet | RainbowKit + wagmi v2 + viem | |
-| Styling | Tailwind CSS | |
-| Storage | IPFS via Pinata | |
-| Hosting | Vercel (frontend + serverless orchestrator) | |
-| Testing | Foundry (`forge test`), Vitest | |
+An oracle alone is worth X. An oracle plus native privacy is worth more, because
+private data feeds become usable in DeFi without being front-run. Add reactive
+execution and it compounds again.
 
----
+The counterpart concept is **compound marginalization** — the cost of
+over-modularizing. Every outsourced service (oracle, keeper, indexer, bridge)
+adds its own fee, its own latency, and its own trust assumption. Stack five of
+them and the user pays rent five times over, on a system that is five times more
+fragile.
 
-## 3. Repository layout
+**This matters for your project.** The strongest submissions are the ones where
+*combining* capabilities is the point — not a single feature demo.
 
-Use **npm workspaces**. The agent pipeline must be a shared package so the
-long-running service and the serverless route run *the same code*, not two
-copies that drift.
+## 1.4 Technical architecture
 
-```
-<repo>/
-├── package.json                 # workspace root
-├── vercel.json                  # build config for the monorepo
-├── .env.example
-│
-├── contracts/                   # Foundry
-│   ├── foundry.toml
-│   ├── remappings.txt
-│   ├── src/
-│   │   ├── AgreementManager.sol      # agreements, tiers, coverage accounting
-│   │   ├── RequestRegistry.sol       # state machine + verdict verification
-│   │   ├── PayoutVault.sol           # token reserve, gated transfers
-│   │   ├── DeadlineAutomation.sol    # Chainlink Automation consumer
-│   │   ├── ExternalVerifier.sol      # Chainlink Functions consumer
-│   │   ├── interfaces/
-│   │   └── libraries/
-│   │       └── VerdictSignature.sol  # the hashing contract — read §5.3
-│   ├── test/
-│   │   ├── Base.t.sol                # shared fixture
-│   │   ├── <PerContract>.t.sol
-│   │   ├── FullFlow.t.sol            # integration
-│   │   └── mocks/MockToken.sol
-│   └── script/
-│       ├── Deploy.s.sol
-│       ├── FundVault.s.sol
-│       ├── SeedAgreement.s.sol
-│       └── SubmitTestRequest.s.sol
-│
-├── packages/pipeline/           # SHARED — no chain, no framework, no ambient env
-│   ├── package.json             # name: @<scope>/pipeline
-│   └── src/
-│       ├── types.ts             # PipelineConfig, Logger, context
-│       ├── agents/{extractor,verifier,estimator,judge}.ts
-│       ├── services/{llm,ipfs,externalApi,metadata}.ts
-│       ├── utils/{retry,signature}.ts
-│       └── index.ts             # barrel export
-│
-├── backend/                     # long-running orchestrator
-│   └── src/{index,config,contracts,orchestrator,pipelineContext}.ts
-│       └── utils/{logger,txQueue}.ts
-│
-├── frontend/                    # Next.js
-│   └── src/
-│       ├── app/
-│       │   ├── api/upload/route.ts        # IPFS pin proxy (server-only secret)
-│       │   └── api/orchestrate/route.ts   # serverless orchestrator
-│       ├── server/orchestrator.ts
-│       ├── components/, hooks/, lib/, types/
-│
-└── scripts/{setup,preflight,deploy-all,seed}.sh
-```
+| Layer | Choice |
+|---|---|
+| Execution | **RISC-V** (not EVM bytecode) |
+| VM compatibility | Solana VM (SVM) — Solana apps port with minimal changes |
+| Consensus | Multiple Concurrent Proposers (MCP), sub-second finality |
+| Upgrades | **Gauss** — seamless protocol upgrades without forking |
+| Privacy | **REX** (Rialo Extended Execution) — MPC, FHE, TEE |
+| Economics | RLO token, **Stake for Service** (stake yield pays for gas) |
 
----
+RISC-V is the choice that unlocks the rest. It allows contracts to behave like
+ordinary software — `async`/`await`, loops, sleeping and resuming **across
+blocks**:
 
-## 4. Phase 1 — Contracts
-
-Build contracts first. The backend and frontend both depend on the ABIs.
-
-### 4.1 `AgreementManager.sol`
-
-Holds the agreements a user opens.
-
-```
-struct Agreement {
-  address holder;
-  bytes32 subjectHash;   // keccak256 of the identifier — never store it raw
-  uint256 deposit;       // token, 6 decimals if USDC
-  uint256 coverage;      // maximum total payout
-  uint256 startTime;
-  uint256 endTime;
-  uint256 requestCount;
-  uint256 totalPaidOut;
-  bool active;
+```rust
+// Pseudo-code Rialo — impossible on the EVM
+async fn liquidation_watcher() {
+    loop {
+        let price = Http::get("https://api.coinbase.com/price/eth").await?;
+        if price < threshold {
+            liquidate_position().await?;
+        }
+        sleep(30.seconds).await;
+    }
 }
 ```
 
-Requirements:
+On the EVM every call is atomic and stateless between invocations. A contract
+cannot wait, cannot poll, cannot wake itself. That single limitation is why the
+middleware industry exists.
 
-- Configurable **tiers** (deposit, coverage, duration) set in the constructor and
-  extendable by an admin.
-- `isActive(id)` returns false when expired **or** when `totalPaidOut >= coverage`.
-- `remainingCoverage(id)` returns 0 for an inactive agreement — never underflow.
-- `recordPayout(id, amount)` is callable **only** by the registry contract
-  (`AccessControl` role), and deactivates the agreement once coverage is used up.
-- Use `SafeERC20`. Do not assume `transfer` returns a bool.
-- Expose `getTiers()` and `getAgreementsByHolder(address)` so the frontend needs
-  one call, not N.
+## 1.5 The capabilities you will actually build against
 
-### 4.2 `PayoutVault.sol`
+Rialo publishes eleven "Real World" capabilities. Five of them determine what
+you can build:
 
-Holds the token reserve. Deliberately dumb.
+**1. Native webcalls** — a contract makes an HTTPS request in one line. No
+oracle contract, no subscription, no LINK, no oracle tax. Verified through
+consensus.
 
-- `fundReserve(amount)` — role-gated.
-- `executePayout(to, amount)` — callable **only** by the registry role.
-- Reverts on zero amount, zero address, and insufficient balance.
-- `availableReserve()` reads the live token balance, not a cached counter.
-- `emergencyWithdraw` for the admin only.
-- `ReentrancyGuard` on every state-changing external function.
+**2. Native timers and reactive transactions** — a contract schedules its own
+future execution, or reacts to an event, with no off-chain keeper. No gas war, no
+missed trigger during congestion.
 
-### 4.3 `RequestRegistry.sol`
+**3. Real-world programmability** — `Future`, `Promise`, `.await`, randomness,
+event-driven logic, sleeping across blocks.
 
-The state machine. This is where the value moves, so it gets the most care.
+**4. Native privacy (REX)** — confidential computation alongside verifiable
+execution, so sensitive inputs (credit scores, health data, order flow) can drive
+on-chain logic without being published.
+
+**5. Real-world identity** — email, SMS or social login as the Web3 passport.
+2FA. Scheduled transactions. Programmable inheritance. No seed phrase.
+
+## 1.6 SCALE — the AI agent framework
+
+**SCALE = Simple Contracts for Agent Labor Execution**, modelled on YC's SAFE
+note. It is a standard contract for paying an AI agent, with four terms:
+
+1. **Prompt** — the work to be done
+2. **Amount** — payment, escrowed on-chain automatically
+3. **Deadline** — when it must be finished
+4. **Judge agent** — a third agent that evaluates the result
 
 ```
-enum Status {
-  Submitted,   // 0
-  Extracting,  // 1
-  Verifying,   // 2
-  Estimating,  // 3
-  Judged,      // 4
-  Paid,        // 5
-  Rejected,    // 6
-  Refunded,    // 7  (deadline fallback)
-  Disputed     // 8  (reserved)
-}
+User → mints SCALE task (4 terms, payment escrowed)
+     → task dispatched over A2A protocol
+     → Worker agent produces the result
+     → Judge agent evaluates
+         PASS → worker is paid
+         FAIL → user is refunded
+     → deadline missed → native timer refunds automatically
 ```
 
-**`submitRequest(agreementId, evidenceURI, description)`**
-- Reject empty evidence.
-- Reject if the agreement is inactive.
-- Reject if `msg.sender` is not the agreement holder.
-- Set `deadline = block.timestamp + claimDeadline`.
-- Push to an `activeIds` array (see the swap-and-pop note below).
-- Emit `RequestSubmitted(id, agreementId, requester, evidenceURI)` — the backend
-  keys off this.
+Rialo runs a live demo of this as a Twitter agent (`@chunliweb3`) and supports
+Google's **A2A (Agent-to-Agent)** protocol so agents from different vendors can
+interoperate.
 
-**`updateStatus(id, newStatus)`** — oracle role only
-- Forward-only. Revert on any status `<=` current.
-- Revert if the target is past `Judged`; that path must go through `submitVerdict`.
+If your project involves AI agents doing paid work, **SCALE is the shape you
+should be imitating.**
 
-**`submitVerdict(id, approved, amount, confidence, reasoning, signature)`** — oracle role only
-- Revert if past the deadline.
-- Revert if already finalized (`Paid`/`Rejected`/`Refunded`).
-- Recompute the payload hash on-chain and recover the signer. Revert unless the
-  signer holds the oracle role. **See §5.3 — this is the most common bug.**
-- If approved: reject a zero amount, reject `amount > remainingCoverage`, set
-  `Paid`, then call `recordPayout` and `executePayout`.
-- If rejected: set `Rejected`, store the reasoning on-chain.
-- Remove from the active set in both branches.
+---
 
-**`refundExpiredRequest(id)`** — automation role only
-- Revert if the deadline has not passed.
-- Revert if already finalized.
-- Set `Refunded`.
+# PART 2 — Choosing what to build
 
-**Make the deadline a constructor parameter, not a constant.** You will want to
-deploy with a 5-minute deadline to demo the refund path without waiting 48 hours.
+## 2.1 The selection test
 
-**Active-set bookkeeping — do not use a linear scan.** The automation contract
-reads this array on every block. Removing by looping over it grows unbounded.
-Use swap-and-pop with an index map:
+Do not start from "what's a cool dApp". Start here:
+
+> **Would this project be significantly worse, or outright impossible, without
+> at least two of Rialo's native capabilities?**
+
+If the answer is no, pick something else. A token swap, an NFT mint, or a staking
+vault makes no argument — those already work fine everywhere.
+
+Score your idea:
+
+| Question | Weight |
+|---|---|
+| Does it need live data from an external API? | Webcalls |
+| Does something have to happen *later*, without a user clicking? | Timers |
+| Does it react to an off-chain event? | Reactivity |
+| Does it involve data that should not be public? | REX |
+| Would a mainstream user refuse to install a wallet for it? | Identity |
+| Do autonomous agents get paid for work? | SCALE |
+
+**Two or more ticks = a good project. Four or more = an excellent one.**
+
+## 2.2 Project catalogue
+
+Pick a lane. Each of these needs multiple capabilities by construction.
+
+### A. Parametric insurance
+Payout triggered by measurable external facts, not a claims adjuster.
+
+- Flight-delay cover — settles from an airline API the moment a flight is late
+- Crop insurance — pays out when a weather station reports rainfall below a threshold
+- Shipment cover — GPS plus a customs API triggers the claim
+- Cold-chain cover for perishables — IoT temperature sensor breaches the range
+
+*Capabilities: webcalls + timers + reactivity.* The whole product **is** a
+webcall plus a timer. On Sepolia this becomes a Chainlink Functions consumer plus
+a registered Automation upkeep plus a service to run them.
+
+### B. Prediction markets
+Rialo argues it settles these better than existing designs because the outcome
+data is native and settlement is reactive — no optimistic-oracle dispute window.
+
+- Sports, elections, weather, token price at a date
+- Resolution comes from an API, automatically, at the deadline
+
+*Capabilities: webcalls + timers + reactivity.*
+
+### C. Real-World Assets that actually live
+Rialo's framing: today's RWA is a dead replica of an off-chain asset. A living
+asset reacts to real data.
+
+- A bond whose yield auto-adjusts to a published CPI figure
+- An invoice token that settles when a payment processor confirms
+- A tokenized property whose yield tracks live occupancy
+- Carbon credits minted and expired by IoT sensor readings
+- A royalty stream that splits automatically when a platform pays out
+
+*Capabilities: webcalls + timers + reactivity (+ privacy for credit data).*
+
+### D. AI agent economy — the SCALE shape
+An agent, or a chain of agents, is hired to do work, judged, and paid.
+
+- Multi-agent evaluation of a submission, with escrow and a deadline
+- Autonomous research/trading agent that reports and is paid on quality
+- Content or code generation with an adversarial judge agent
+- An agent marketplace where agents subcontract to each other over A2A
+
+*Capabilities: SCALE + webcalls + timers + programmability.* This is the lane
+Rialo is most actively promoting.
+
+### E. Private credit and consumer lending
+Rialo says this is the first time consumer credit is genuinely feasible on-chain,
+because the score can stay confidential.
+
+- Loan approval against a credit score that never goes public
+- Under-collateralized lending backed by verified off-chain income
+- KYC-gated pools where the identity data stays private
+
+*Capabilities: privacy + webcalls + identity.*
+
+### F. Consumer apps that hide the chain
+- Subscriptions that auto-renew from a contract timer
+- A smart will that transfers assets after a proof-of-life timer expires
+- Scheduled recurring payments
+- Social-login onboarding with no seed phrase
+
+*Capabilities: identity + timers + usability.*
+
+### G. Reactive DeFi
+- An AMM whose curve adjusts to real-world volatility data
+- Auto-rebalancing index funds driven by live market data
+- Liquidation logic that watches a price feed itself instead of paying keepers
+
+*Capabilities: webcalls + reactivity + privacy against MEV.*
+
+## 2.3 Scoping rules
+
+- **One domain, one flow, done properly.** A finished single flow beats three
+  half-built ones.
+- **Every project needs a state machine with a terminal state.** Something starts,
+  progresses through stages, and definitively ends — paid, rejected, refunded,
+  expired. This is what makes the demo legible.
+- **Every project needs a deadline fallback.** If the off-chain half dies, the
+  user must not be stuck. This is where you demonstrate the timer argument.
+- **Money must actually move on-chain.** A demo with no value transfer proves
+  nothing about escrow, caps or trust.
+
+---
+
+# PART 3 — Why build on Sepolia, not on Rialo
+
+## 3.1 The practical reason
+
+Rialo is on **Private DevNet**. There is no public testnet or mainnet, no public
+RPC endpoint, no faucet, no explorer. You cannot deploy to it today.
+
+## 3.2 The better reason
+
+Building the workarounds **is the argument**.
+
+Anyone can say "native webcalls would be easier". You will be able to say: *here
+are the 86 lines of consumer contract, the CBOR encoding, the funded
+subscription, and the manual registration step I needed — to make one GET
+request.* That is not an opinion, it is an artifact.
+
+So build it on Sepolia with the workarounds, **instrument the cost**, and present
+the delta. Your project is the "before" photograph.
+
+## 3.3 What this means concretely
+
+1. Build the product properly on Sepolia. It must actually work.
+2. Isolate every workaround so it is **visible and countable**.
+3. Keep your core business logic in a package with **zero oracle-vendor imports**,
+   so migration means replacing the outer layer only.
+4. At the end, **count the lines** — middleware versus product — and write down
+   which files disappear on Rialo, and which trust assumption goes with them.
+
+A typical honest result is that **more than half the codebase is scaffolding**.
+
+---
+
+# PART 4 — Translating each Rialo capability to Sepolia
+
+This is the core how-to. For each capability, here is what you build instead.
+
+## 4.1 Native webcall → Chainlink Functions
+
+**Rialo:** `let data = Http::get(url).await?;`
+
+**Sepolia:** a `FunctionsClient` consumer contract with inline JavaScript,
+CBOR-encoded arguments, a funded subscription, and a manual consumer
+registration through a web dashboard.
 
 ```solidity
-mapping(uint256 => uint256) private _activeIndexPlusOne; // 0 means absent
+contract ExternalDataConsumer is FunctionsClient, ConfirmedOwner {
+    using FunctionsRequest for FunctionsRequest.Request;
 
-function _addToActive(uint256 id) internal {
-    activeIds.push(id);
-    _activeIndexPlusOne[id] = activeIds.length;
-}
+    address constant ROUTER = 0xb83E47C2bC239B3bf370bc41e1459A34b41238D0; // Sepolia
+    bytes32 constant DON_ID =
+        0x66756e2d657468657265756d2d7365706f6c69612d3100000000000000000000;
 
-function _removeFromActive(uint256 id) internal {
-    uint256 indexPlusOne = _activeIndexPlusOne[id];
-    if (indexPlusOne == 0) return;
-    uint256 index = indexPlusOne - 1;
-    uint256 lastIndex = activeIds.length - 1;
-    if (index != lastIndex) {
-        uint256 moved = activeIds[lastIndex];
-        activeIds[index] = moved;
-        _activeIndexPlusOne[moved] = index + 1;
+    uint64 public subscriptionId;
+    uint32 public gasLimit = 300_000;
+
+    string public source =
+        "const id = args[0];"
+        "const res = await Functions.makeHttpRequest({ url: `https://api.example.com/${id}` });"
+        "if (res.error) throw Error('API failed');"
+        "return Functions.encodeString(JSON.stringify(res.data));";
+
+    mapping(bytes32 => uint256) public requestToEntity;
+    mapping(uint256 => string) public result;
+    mapping(uint256 => bytes) public failure;
+
+    function request(uint256 entityId, string calldata arg)
+        external onlyOwner returns (bytes32 requestId)
+    {
+        FunctionsRequest.Request memory req;
+        req.initializeRequestForInlineJavaScript(source);
+        string[] memory args = new string[](1);
+        args[0] = arg;
+        req.setArgs(args);
+        requestId = _sendRequest(req.encodeCBOR(), subscriptionId, gasLimit, DON_ID);
+        requestToEntity[requestId] = entityId;
     }
-    activeIds.pop();
-    delete _activeIndexPlusOne[id];
+
+    function fulfillRequest(bytes32 requestId, bytes memory response, bytes memory err)
+        internal override
+    {
+        uint256 id = requestToEntity[requestId];
+        if (err.length > 0) { failure[id] = err; return; }  // handle the error branch
+        result[id] = string(response);
+    }
 }
 ```
 
-### 4.4 `DeadlineAutomation.sol` — stands in for a native timer
+Then, by hand: create a subscription at `functions.chain.link`, fund it with
+LINK, deploy the consumer with the subscription id, and add the consumer address
+to the subscription.
 
-Implements `AutomationCompatibleInterface`.
+**Gate `request()` to the owner** or anyone can drain your LINK.
 
-- `checkUpkeep` is `view`. Scan `getActiveRequests()`, collect those past their
-  deadline and not finalized, **cap the batch** (e.g. 5) so the call stays within
-  gas limits, and return `abi.encode(ids)`.
-- `performUpkeep` decodes and calls `refundExpiredRequest` for each, wrapped in
-  `try/catch` so one bad id cannot block the rest.
-- Treat `performData` as untrusted — the registry re-validates the deadline and
-  status anyway, which is what makes this safe.
+**Count this**: contract lines + registration steps + LINK cost.
 
-### 4.5 `ExternalVerifier.sol` — stands in for a native webcall
+## 4.2 Native timer → Chainlink Automation
 
-A Chainlink Functions consumer. Inline JavaScript source that calls your external
-API, `setArgs` for the parameter, `_sendRequest`, and a `fulfillRequest` callback
-that stores the result keyed by request id.
+**Rialo:** `sleep(48.hours).then(|| refund_user());`
 
-Handle the error branch of `fulfillRequest` — store the error rather than writing
-an empty success. Gate `requestVerification` to the owner so the subscription
-cannot be drained.
+**Sepolia:** an `AutomationCompatibleInterface` contract, a registered upkeep, and
+a LINK balance that must never run dry.
 
-> Write this contract even if you never wire it into the main flow. Its size and
-> setup cost are the evidence for §1.
+```solidity
+contract DeadlineAutomation is AutomationCompatibleInterface {
+    IRegistry public immutable registry;
+    uint256 public constant MAX_PER_UPKEEP = 5;  // cap the batch, gas is bounded
 
-### 4.6 Tests — target 90%+ line coverage on `src/`
+    function checkUpkeep(bytes calldata)
+        external view override returns (bool, bytes memory)
+    {
+        uint256[] memory active = registry.getActiveIds();
+        uint256[] memory expired = new uint256[](MAX_PER_UPKEEP);
+        uint256 count;
+        for (uint256 i = 0; i < active.length && count < MAX_PER_UPKEEP; i++) {
+            (uint256 deadline, uint8 status) = registry.summary(active[i]);
+            if (block.timestamp > deadline && status < FINALIZED) {
+                expired[count++] = active[i];
+            }
+        }
+        if (count == 0) return (false, "");
+        uint256[] memory out = new uint256[](count);
+        for (uint256 i = 0; i < count; i++) out[i] = expired[i];
+        return (true, abi.encode(out));
+    }
 
-Write a `Base.t.sol` fixture that deploys the whole stack and wires the roles
-exactly as the deploy script does. Then cover:
-
-- Agreement: purchase, invalid tier, missing approval, expiry, coverage
-  exhaustion, role-gating on `recordPayout`.
-- Vault: funding, payout role-gating, insufficient reserve, zero amount/address.
-- Registry: submit, non-holder rejected, inactive agreement rejected, status
-  forward-only, **invalid signature rejected**, **tampered payload rejected**,
-  amount over coverage rejected, verdict after deadline rejected, verdict on a
-  finalized request rejected, refund role-gating, refund before deadline rejected.
-- Full flow: approved path, rejected path, deadline-refund path, batch upkeep,
-  coverage exhaustion blocking a second request.
-- A fuzz test that `remainingCoverage` never underflows.
-
-**Foundry gotcha:** put `vm.expectRevert(...)` **before** `vm.prank(...)`, not
-after. The other order silently makes the test contract the caller and the
-assertion passes for the wrong reason.
-
-To test the Functions consumer without a live DON, `vm.mockCall` the router
-address for `sendRequest`, then `vm.prank(router)` to invoke
-`handleOracleFulfillment`.
-
-### 4.7 Deploy script
-
-One script that deploys all contracts, wires every role, and **writes the
-addresses to a JSON file** the other packages read.
-
-Role wiring — get this exactly right or the flow silently fails:
-
-```
-vault.grantRegistryRole(address(registry));
-registry.grantOracleRole(oracleAddress);
-registry.grantAutomationRole(address(automation));
-agreementManager.grantRole(ADMIN_ROLE, address(registry));  // for recordPayout
+    function performUpkeep(bytes calldata performData) external override {
+        uint256[] memory ids = abi.decode(performData, (uint256[]));
+        for (uint256 i = 0; i < ids.length; i++) {
+            // performData is attacker-supplied in the general case; the registry
+            // re-validates deadline and status, which is what makes this safe.
+            try registry.expire(ids[i]) {} catch {}
+        }
+    }
+}
 ```
 
-Read the token address, oracle address, and deadline from env with sensible
-defaults so a demo deploy can override the deadline.
+Register at `automation.chain.link` → "Custom logic" → target contract, 500k gas
+limit, 5 LINK starting balance.
 
-**Verification step:** `forge test` green, coverage ≥ 90%, then deploy to a local
-Anvil node and run the seed scripts against it before spending any testnet funds.
+**Deploy with a configurable deadline**, not a constant. You will want a 5-minute
+deadline to demo the expiry path instead of waiting 48 hours.
 
----
+## 4.3 Reactive execution → an off-chain service
 
-## 5. Phase 2 — The shared agent pipeline
+**Rialo:** the contract reacts on-chain when the event fires.
 
-This is a **standalone workspace package**. It must not import ethers-connected
-singletons, read `process.env` directly, or depend on a logging framework.
+**Sepolia:** a Node.js service that must run 24/7, watch for events, and drive the
+next step. This is usually the single largest piece of middleware.
 
-### 5.1 Inject configuration, do not import it
+Three things it must get right:
 
-The same code runs inside a long-lived service with validated config *and* inside
-a serverless function with raw env vars. Neither may dictate the other.
+**Poll blocks, do not use a WebSocket subscription.** ethers v6 WS reconnects drop
+events silently, and a missed event costs a real payout.
 
 ```ts
-export interface PipelineConfig {
-  mockAI: boolean;              // run the whole pipeline with no LLM key
-  llmApiKey?: string;
-  llmModel: string;
-  ipfsGateway: string;
-  externalApiKey?: string;
-}
-
-export interface Logger {
-  debug(obj: unknown, msg?: string): void;
-  info(obj: unknown, msg?: string): void;
-  warn(obj: unknown, msg?: string): void;
-  error(obj: unknown, msg?: string): void;
-}
-
-export interface PipelineContext { config: PipelineConfig; logger: Logger; }
+setInterval(async () => {
+  const head = await provider.getBlockNumber();
+  if (head <= lastScanned) return;
+  const logs = await contract.queryFilter(contract.filters.Submitted(), lastScanned + 1, head);
+  lastScanned = head;
+  for (const log of logs) void handle(log);
+}, POLL_MS);
 ```
 
-Every agent takes `(input, ctx: PipelineContext)`. Export a `silentLogger` and a
-`configFromEnv(env)` helper.
+**Serialize transactions and manage nonces yourself.** Two items in flight from
+one key means the second send reuses the first's nonce and fails with
+`nonce too low`. This only appears under concurrency, so it is easy to miss.
 
-**`mockAI` is not a toy.** It is how the tests run without API keys, and it is the
-fallback when the LLM provider rate-limits you during a live demo. Build it in
-from the start.
+```ts
+class TxQueue {
+  private tail: Promise<unknown> = Promise.resolve();
+  private next: number | null = null;
 
-### 5.2 The four agents
+  async send(build: (nonce: number) => Promise<TxResponse>) {
+    const run = this.tail.then(() => this.exec(build), () => this.exec(build));
+    this.tail = run.then(() => undefined, () => undefined);  // keep the chain alive
+    return run;
+  }
 
-**Extractor** — the only agent that touches the raw evidence.
-- Fetch from IPFS, detect the media type from magic bytes, base64-encode.
-- Send to a vision model with `temperature: 0` and a strict JSON schema in the
-  prompt.
-- **Never trust the model's output shape.** Write a `normalizeExtracted()` that
-  clamps numbers to range, coerces unknown enum values to a safe default, filters
-  non-strings out of arrays, and returns a fully-typed object. A malformed field
-  must not reach the chain.
-- Strip markdown fences before parsing; models add them despite instructions.
+  private async exec(build) {
+    this.next ??= await this.wallet.getNonce('pending');
+    const nonce = this.next;
+    try {
+      const tx = await build(nonce);
+      this.next = nonce + 1;
+      return await tx.wait();
+    } catch (e) {
+      this.next = null;   // may or may not have been consumed — resync
+      throw e;
+    }
+  }
+}
+```
 
-**Verifier** — cross-checks the extracted data against the outside world.
-- Start at score 100 and subtract explicit, named penalties.
-- Return a list of human-readable `issues` alongside the score.
-- Every external lookup is wrapped so a failure degrades the score rather than
-  throwing away the whole request.
-- **Weak signals must not be treated as fraud.** Missing photo metadata is normal
-  — messaging apps strip it routinely. Record it as an issue with **zero** score
-  penalty. Only an impossible signal (a future timestamp) should cost points.
+**Recover on restart.** On boot, read the active set and resume anything
+unfinished. Guard with an in-flight set so a duplicate trigger costs no gas.
 
-**Estimator** — computes the amount.
-- Rule-based table first, LLM only as a sanity check.
-- **Clamp the LLM's adjustment.** If the model proposes a different number, bound
-  it within a multiple of the rule-based range. A hallucinated number must not be
-  able to inflate a payout.
-- If the LLM call fails, log it and return the rule-based figure. The LLM is a
-  check, not a dependency.
+## 4.4 SCALE → a signed verdict from a privileged signer
 
-**Judge** — deterministic code, **not an LLM call**.
-- This is the step that decides whether money moves, so it must be reproducible
-  and auditable from the other three outputs alone.
-- Ordered reject rules: fraud flags → unusable evidence → verification score
-  below threshold → confidence below threshold → no computable amount.
-- Overall confidence = `min(extractorConfidence, verifierScore)`.
-- **Clamp the amount to remaining coverage** here as well as on-chain, so the
-  contract revert is defence-in-depth rather than the primary control.
-- Return a human-readable `reasoning` string — it is stored on-chain and will be
-  read by strangers on a block explorer. Write it for them.
+**Rialo:** escrow, deadline and judging are protocol primitives. Trustless.
 
-### 5.3 Verdict signing — read this twice
+**Sepolia:** an off-chain signer holds a privileged role and submits the outcome.
+**This is the one real trust hole in your design — do not hide it, explain it.**
 
-The single most common failure in this architecture is the off-chain signer and
-the on-chain verifier hashing the payload differently. Nothing verifies, every
-payout reverts, and the error message tells you nothing useful.
+Bound it three ways:
+
+1. The outcome must carry a **signature** the contract verifies.
+2. The contract **caps** the payout at the agreement's remaining balance.
+3. The **deadline automation** refunds if the signer never responds.
+
+### The signing trap — read this twice
+
+The most common failure in this architecture is the off-chain signer and the
+on-chain verifier hashing the payload differently. Nothing verifies, every payout
+reverts, and the error tells you nothing.
 
 **Use `abi.encode`, never `abi.encodePacked`.** Packed encoding of a trailing
-dynamic string is ambiguous — two different verdicts can produce the same bytes.
-
-On-chain:
+dynamic string is ambiguous — two different payloads can produce the same bytes.
 
 ```solidity
 library VerdictSignature {
     using MessageHashUtils for bytes32;
 
-    function hash(
-        uint256 id, bool approved, uint256 amount,
-        uint8 confidence, string memory reasoning
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encode(id, approved, amount, confidence, reasoning));
+    function hash(uint256 id, bool approved, uint256 amount, uint8 confidence, string memory reason)
+        internal pure returns (bytes32)
+    {
+        return keccak256(abi.encode(id, approved, amount, confidence, reason));
     }
 
-    function recoverSigner(bytes32 payloadHash, bytes memory signature)
+    function recoverSigner(bytes32 payloadHash, bytes memory sig)
         internal pure returns (address)
     {
-        return ECDSA.recover(payloadHash.toEthSignedMessageHash(), signature);
+        return ECDSA.recover(payloadHash.toEthSignedMessageHash(), sig);
     }
 }
 ```
 
-Off-chain — must mirror it exactly:
-
 ```ts
-export function verdictPayloadHash(
-  id: number | bigint, approved: boolean, amount: bigint,
-  confidence: number, reasoning: string,
-): string {
+export function payloadHash(id, approved, amount: bigint, confidence, reason) {
   return keccak256(
     AbiCoder.defaultAbiCoder().encode(
       ['uint256', 'bool', 'uint256', 'uint8', 'string'],
-      [id, approved, amount, confidence, reasoning],
+      [id, approved, amount, confidence, reason],
     ),
   );
 }
-
-export async function signVerdict(wallet: Wallet, ...args): Promise<string> {
-  return wallet.signMessage(getBytes(verdictPayloadHash(...args)));
-}
+export const sign = (wallet, ...a) => wallet.signMessage(getBytes(payloadHash(...a)));
 ```
 
-**Expose a public `verdictHashFor(...)` view on the registry** and assert in a
-test that it equals the TypeScript hash for the same inputs. Then verify it
-against the deployed contract with a CLI call before you trust the pipeline.
+**Expose a public `hashFor(...)` view on your contract**, assert in a test that it
+equals the TypeScript hash, and verify it against the *deployed* contract with a
+CLI call before trusting the pipeline.
+
+## 4.5 Native privacy → hashing and off-chain storage
+
+**Rialo:** REX computes on confidential data.
+
+**Sepolia:** you cannot. Approximate it — hash identifiers before storing
+(`keccak256(plate)` instead of the plate), keep sensitive material off-chain, and
+**state plainly in your write-up that this is a downgrade, not a solution.**
+
+Honesty here is worth more than a fake privacy claim.
+
+## 4.6 Real-world identity → a wallet, unfortunately
+
+**Rialo:** email/SMS/social login, 2FA.
+
+**Sepolia:** the user installs a wallet, safeguards a seed phrase, adds a test
+network and funds their own gas. Note in your write-up how many users you lose at
+each of those four steps.
 
 ---
 
-## 6. Phase 3 — The long-running orchestrator
+# PART 5 — Reference architecture
 
-A Node service that watches the chain and drives requests through the pipeline.
+Adapt the names to your domain. The shape holds for every project in Part 2.
 
-### 6.1 Poll blocks; do not subscribe over WebSocket
+```
+<repo>/
+├── package.json              # npm workspaces root
+├── vercel.json               # monorepo build config
+├── .env.example
+│
+├── contracts/                # Foundry
+│   ├── src/
+│   │   ├── AgreementManager.sol    # agreements, tiers, balance accounting
+│   │   ├── Registry.sol            # state machine + signature verification
+│   │   ├── PayoutVault.sol         # token reserve, role-gated transfers
+│   │   ├── DeadlineAutomation.sol  # ← Chainlink Automation (workaround)
+│   │   ├── ExternalConsumer.sol    # ← Chainlink Functions (workaround)
+│   │   └── libraries/VerdictSignature.sol
+│   ├── test/                       # Base.t.sol fixture + per-contract + FullFlow
+│   └── script/                     # Deploy, FundVault, Seed, SubmitTest
+│
+├── packages/core/            # SHARED — no chain, no framework, no ambient env
+│   └── src/{types,steps,services,utils}/
+│
+├── backend/                  # ← the 24/7 service (workaround)
+│   └── src/{index,config,contracts,orchestrator}.ts
+│
+├── frontend/                 # Next.js 14 App Router
+│   └── src/{app,components,hooks,lib,server}/
+│
+└── scripts/{setup,preflight,deploy-all}.sh
+```
 
-ethers v6 WebSocket reconnects drop events silently. A missed submission event
-costs a real payout. Poll on an interval with `queryFilter(from, to)` and track
-the last scanned block.
+**Stack:** Solidity 0.8.24 + Foundry · OpenZeppelin v5.0.2 · Chainlink contracts
+1.2.0 · TypeScript ESM · ethers v6 · Next.js 14 · wagmi v2 + viem + RainbowKit ·
+Tailwind · Vitest · Vercel.
 
-### 6.2 Serialize transactions and manage nonces yourself
+## 5.1 Contract requirements
 
-Two requests can be in the pipeline at once, both writing from the same key. If
-you let the library derive the nonce per call, the second send reuses the first's
-nonce and fails with `nonce too low`. This *will* happen under concurrency and it
-is easy to miss in single-request testing.
+**AgreementManager** — tiers, balances, expiry. `isActive` false when expired
+**or** exhausted. `remainingBalance` returns 0 for inactive, never underflows.
+`recordPayout` callable only by the registry role. Use `SafeERC20`.
 
-Build one queue with an explicit counter:
+**PayoutVault** — role-gated `executePayout`, reverts on zero amount, zero
+address, insufficient balance. `availableReserve()` reads the live token balance,
+not a cached counter.
 
-```ts
-class OracleTxQueue {
-  private tail: Promise<unknown> = Promise.resolve();
-  private nextNonce: number | null = null;
+**Registry** — the state machine:
 
-  async send(label, build: (nonce: number) => Promise<TxResponse>) {
-    const run = this.tail.then(() => this.exec(label, build),
-                              () => this.exec(label, build));
-    this.tail = run.then(() => undefined, () => undefined); // keep the chain alive
-    return run;
-  }
+```
+Submitted → Processing… → Finalized → Paid | Rejected | Expired
+```
 
-  private async exec(label, build) {
-    this.nextNonce ??= await this.wallet.getNonce('pending');
-    const nonce = this.nextNonce;
-    try {
-      const tx = await build(nonce);
-      this.nextNonce = nonce + 1;
-      return await tx.wait();
-    } catch (err) {
-      this.nextNonce = null;  // may or may not have been consumed — resync
-      throw err;
+- Forward-only status transitions; revert on any regression.
+- Deadline as a **constructor parameter**.
+- Verify the signature before moving any value.
+- Cap the payout at the remaining balance.
+- **Active-set removal must be swap-and-pop with an index map**, not a linear
+  scan — the automation contract reads this array every block:
+
+```solidity
+mapping(uint256 => uint256) private _indexPlusOne;  // 0 = absent
+
+function _remove(uint256 id) internal {
+    uint256 ipo = _indexPlusOne[id];
+    if (ipo == 0) return;
+    uint256 i = ipo - 1;
+    uint256 last = activeIds.length - 1;
+    if (i != last) {
+        uint256 moved = activeIds[last];
+        activeIds[i] = moved;
+        _indexPlusOne[moved] = i + 1;
     }
-  }
+    activeIds.pop();
+    delete _indexPlusOne[id];
 }
 ```
 
-### 6.3 Other requirements
+## 5.2 Shared core package rules
 
-- **Crash recovery:** on startup, read the active set and resume anything not yet
-  finalized.
-- **Idempotency:** guard with an in-flight set, and skip early if the on-chain
-  status is already terminal so a duplicate trigger costs no gas.
-- **Retry with exponential backoff and jitter** around each agent call.
-- **Structured JSON logging.** Debugging this pipeline is entirely log-driven.
-- `GET /health` returning chain lag, in-flight ids, and the oracle address.
-- Admin endpoints (retry a request, inspect runs) **gated behind an API key** —
-  they trigger paid work.
-- On pipeline failure, log and stop. The deadline automation is the safety net;
-  do not invent a second recovery path.
+- **Inject config and logger; never read `process.env` inside it.** The same code
+  must run inside a validated long-running service and inside a serverless
+  function without either dictating the other.
+- Ship a **`MOCK` mode** that runs the whole flow with no external API keys. This
+  is how your tests run, and it is your fallback when a provider rate-limits you
+  mid-demo. Build it in from day one.
+- **Never trust external/model output shape.** Normalize into a fully-typed
+  object: clamp numbers to range, coerce unknown enums to a safe default, filter
+  non-strings from arrays. A malformed field must not reach the chain.
+- **The final decision step must be deterministic code, not an LLM call.** It is
+  the step that moves money, so it must be reproducible and auditable from its
+  inputs alone. Use the model for extraction and estimation; use plain code for
+  the verdict.
+- If a model proposes an amount, **clamp it** within a multiple of your
+  rule-based range. A hallucinated number must not be able to inflate a payout.
 
----
+## 5.3 Frontend rules
 
-## 7. Phase 4 — Frontend
-
-### 7.1 Ground rules
-
-- **The app must build and render with zero environment variables.** If contract
-  addresses are unset, show a clear banner explaining what to configure — never
-  let every read silently return nothing.
-- Read addresses from `NEXT_PUBLIC_*` env with a checked-in deployment JSON as
+- **Must build and render with zero environment variables.** If addresses are
+  unset, show a banner explaining what to configure — never let every read
+  silently return nothing.
+- Read addresses from `NEXT_PUBLIC_*` with a checked-in deployment JSON as
   fallback, so a redeploy can repoint without a code change.
-- Poll contract reads on an interval, and **stop polling once the request reaches
-  a terminal state** so a finished tab does not hammer the RPC.
-- Translate contract errors into plain language. Map custom error names and
-  `user rejected` to sentences a non-developer understands; never surface raw ABI
-  data.
-
-### 7.2 Screens
-
-| Route | Contents |
-|---|---|
-| `/` | Value proposition, the agent pipeline explained, and the Sepolia-vs-Rialo comparison from §1 |
-| `/agreements` | Tier cards, purchase modal, the user's existing agreements |
-| `/requests/new` | Agreement picker, evidence upload, description, submit |
-| `/requests` | The user's requests with status badges |
-| `/requests/[id]` | Live status tracker, final verdict with reasoning, explorer link |
-
-### 7.3 Purchase flow
-
-ERC-20 needs an allowance before the contract can pull the deposit. Check the
-current allowance first, skip the approval if it already covers the amount, and
-show the user which of the two transactions they are on.
-
-### 7.4 Evidence upload
-
-- Compress client-side before upload — phone photos are far too large for both
-  the pin service and the vision model.
-- Upload through a **server-side API route** so the pinning credential never
-  reaches the browser.
-- Validate media type and size on the server; do not trust the client.
-- Read the new request id from the **transaction receipt's event log**, not from a
+- Poll contract reads on an interval and **stop polling at a terminal state**.
+- Translate contract errors into sentences. Map custom error names and
+  `user rejected` to plain language; never surface raw ABI data.
+- Read a new entity id from the **transaction receipt's event log**, not from a
   `nextId` read — that races against other users.
-- IPFS propagation is not instant. A pinned file can 404 on a gateway for ~20–30
-  seconds. Try multiple gateways in order and do not treat the first failure as
-  fatal.
+- ERC-20 needs an allowance first. Check it, skip approval if sufficient, and show
+  the user which of the two transactions they are on.
+- Upload files through a **server-side route** so the storage credential never
+  reaches the browser. Compress client-side first.
 
-### 7.5 Status tracker
+## 5.4 If you cannot host the 24/7 service
 
-Render one step per pipeline stage. Two traps:
+Run the same logic from a serverless route. **This is not a simulation** — it is
+the same code with a different trigger. Never build a fake result path and present
+it as real.
 
-- `done` and `active` must be **mutually exclusive**, or the final step renders
-  as still-in-progress on a completed request.
-- Rejected and refunded requests stop where they stopped — only the approved path
-  lights up the final step.
-
----
-
-## 8. Phase 5 — Serverless orchestrator
-
-A long-running service needs a host. If you do not have one, run the *same*
-pipeline from a serverless route so requests still complete.
-
-This is **not a simulation** — it is the same agent code with a different
-trigger. Do not build a fake result path and present it as a real one.
-
-**The constraint:** a full run is ~5 chain transactions at ~15s of confirmation
-each. That exceeds any serverless timeout.
-
-**The design:** each invocation advances the request by **exactly one stage** and
-returns. The client keeps calling until the request is terminal.
+The constraint: a full run is several transactions at ~15s confirmation each,
+which exceeds any serverless timeout. So **advance one stage per invocation** and
+let the client keep calling until terminal.
 
 ```
-POST /api/orchestrate  { requestId }
+POST /api/advance { id }
   → read on-chain status
-  → if terminal: return { done: true }
-  → if status < Judged: advance status by one, return
-  → if status == Judged: run all agents, sign, submit verdict, return
+  → terminal?          → return { done: true }
+  → not yet finalized? → advance one stage, return
+  → ready to finalize? → run the logic, sign, submit, return
 ```
 
-Requirements:
+Idempotent. Return 409 on a concurrent race — the forward-only status check makes
+it safe. Keep the signer key server-side only. Show nothing about this in the UI.
 
-- The oracle key lives **only** in server-side env. This route is the only thing
-  that can move a request forward.
-- **Idempotent.** Calling it on a finalized request returns the terminal state
-  instead of erroring.
-- Return HTTP 409 with a `raced` flag when a concurrent caller won the stage —
-  the registry's forward-only check makes this safe, and the next poll picks up
-  the true state.
-- Drive it from the request detail page with a hook that fires while the status is
-  non-terminal, one call in flight at a time.
-- **Show nothing about this in the UI.** The status tracker already reflects
-  on-chain state; a second progress indicator for the same thing is noise.
+## 5.5 Build order
+
+```
+1. Contracts + tests           → forge test green, coverage ≥ 90%
+2. Local Anvil deploy          → seed scripts run end-to-end, free
+3. Shared core package         → unit tests green in MOCK mode
+4. Hash parity check           → TS hash == deployed contract hash
+5. Backend orchestrator        → full run against local Anvil
+6. Frontend                    → builds with no env vars
+7. Serverless route (if needed)
+8. Testnet deploy + verify     → read roles back from chain
+9. One full run through prod   → payout confirmed on-chain
+10. Measure the line counts
+```
+
+Do not jump to the frontend before the contracts are tested, or you will debug
+three layers at once.
 
 ---
 
-## 9. Phase 6 — Deployment
+# PART 6 — Deploy to Sepolia, Vercel and GitHub
 
-### 9.1 Order of operations
+## 6.1 Get testnet funds first
 
-1. Deploy contracts, verify on the block explorer.
-2. **Verify the role wiring by reading it back from the chain** — do not trust the
-   deploy log. Query `hasRole` for every role you granted.
-3. Export ABIs and the address JSON into both packages.
-4. Send the oracle wallet gas. It pays for every status update and verdict.
-5. Fund the vault.
-6. Set frontend env vars, redeploy.
-7. Run one full end-to-end request through the **deployed** path.
+| Need | Where | Amount |
+|---|---|---|
+| Sepolia ETH | `sepoliafaucet.com`, `faucets.chain.link` | ~0.5 |
+| Test USDC | `faucet.circle.com` (choose Ethereum Sepolia) | 30+ |
+| LINK | `faucets.chain.link` | 10+ if using Chainlink |
 
-### 9.2 Write a preflight script
+Sepolia USDC: `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`
 
-Before spending anything, check and report: chain id, deployer balance in gas
-token and payment token, oracle gas balance, and whether the vault holds at least
-the cheapest tier's coverage. Print addresses and balances only — **never a
-private key**.
+A public RPC works and needs no API key:
+`https://ethereum-sepolia-rpc.publicnode.com`
 
-### 9.3 Budget the reserve correctly
+## 6.2 Secrets — non-negotiable
 
-A request pays out `min(estimatedAmount, remainingCoverage)`, and the vault must
-hold at least that. So:
+- `.env` is git-ignored and `chmod 600`.
+- Generate the service signer key locally and write it **straight to the file** —
+  never print it to a terminal.
+- **Never paste a private key into a chat window, including with an AI
+  assistant.** Put it in a local file and let the tooling read it from there.
+- Use burner wallets holding only testnet funds.
+- If an API key ever appears in a chat, **rotate it** afterwards.
+
+## 6.3 Write a preflight script
+
+Before spending anything, check and print: chain id, deployer gas balance,
+deployer token balance, signer gas balance, and whether the vault holds at least
+the largest payout you intend to demo. Print **addresses and balances only**.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+set -a; source .env; set +a
+
+# A raw private key is 64 hex chars; the 0x prefix is a convention and both are
+# valid. Foundry's vm.envUint is the strict one — normalise here.
+export DEPLOYER_PRIVATE_KEY="0x${DEPLOYER_PRIVATE_KEY#0x}"
+
+DEPLOYER=$(cast wallet address --private-key "$DEPLOYER_PRIVATE_KEY")
+echo "Chain:    $(cast chain-id --rpc-url "$RPC_URL")"
+echo "Deployer: $DEPLOYER"
+echo "ETH:      $(cast from-wei "$(cast balance "$DEPLOYER" --rpc-url "$RPC_URL")")"
+```
+
+## 6.4 Deploy the contracts
+
+```bash
+cd contracts
+forge script script/Deploy.s.sol \
+  --rpc-url "$RPC_URL" --broadcast \
+  --verify --etherscan-api-key "$ETHERSCAN_API_KEY"
+```
+
+Then **verify the role wiring by reading it back from the chain** — do not trust
+the deploy log:
+
+```bash
+cast call $REGISTRY "hasRole(bytes32,address)(bool)" \
+  $(cast keccak "ORACLE_ROLE") $SIGNER_ADDRESS --rpc-url "$RPC_URL"
+```
+
+Every role you granted should return `true`. Then:
+
+```bash
+# Export ABIs into both packages
+for c in AgreementManager Registry PayoutVault; do
+  jq '.abi' out/$c.sol/$c.json > ../backend/src/abis/$c.json
+  cp ../backend/src/abis/$c.json ../frontend/src/lib/abis/$c.json
+done
+cp deployments/sepolia.json ../frontend/src/lib/deployments.json
+
+# Fund the signer's gas and the payout reserve
+cast send $SIGNER --value 0.05ether --rpc-url "$RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY"
+forge script script/FundVault.s.sol --rpc-url "$RPC_URL" --broadcast
+```
+
+**Budget the reserve correctly.** A payout is
+`min(computedAmount, remainingBalance)`, and the vault must hold at least that:
 
 ```
 vault balance  >=  the coverage of the cheapest tier you intend to demo
 ```
 
 Otherwise the payout reverts with an insufficient-reserve error part-way through
-your demo. Fund the vault first, then buy the agreement.
+your demo. Fund the vault **before** buying the agreement.
 
-### 9.4 Secrets
+## 6.5 Verify contracts on Etherscan
 
-- `.env` is git-ignored, `chmod 600`.
-- Generate the oracle key locally with a wallet CLI and write it straight to the
-  file — never print it.
-- **Never paste a private key into a chat window**, including with an AI
-  assistant. Put it in a local file and let the tooling read it from there.
-- Deploy and oracle keys should be burner wallets holding only testnet funds.
-
----
-
-## 10. Environment variables
+Get a free key at `etherscan.io/apis`. If `--verify` failed during deploy:
 
 ```bash
-# ── Contracts / deploy ──
-DEPLOYER_PRIVATE_KEY=
-SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com   # no API key needed
-ORACLE_ADDRESS=
-ETHERSCAN_API_KEY=                 # optional, for source verification
-DEADLINE_SECONDS=172800            # set to 300 to demo the refund path
-FUND_AMOUNT=
-
-# ── Orchestrator (service and serverless both) ──
-RPC_URL=
-ORACLE_PRIVATE_KEY=
-MOCK_AI=true                       # run with no LLM key
-LLM_API_KEY=
-IPFS_GATEWAY=https://gateway.pinata.cloud
-ADMIN_API_KEY=                     # gates the admin endpoints
-
-# ── Frontend ──
-NEXT_PUBLIC_WC_PROJECT_ID=
-NEXT_PUBLIC_AGREEMENT_MANAGER=
-NEXT_PUBLIC_REQUEST_REGISTRY=
-NEXT_PUBLIC_PAYOUT_VAULT=
-NEXT_PUBLIC_TOKEN=
-IPFS_PIN_JWT=                      # server-only, never NEXT_PUBLIC_
+forge verify-contract $ADDRESS src/Registry.sol:Registry \
+  --chain-id 11155111 --compiler-version 0.8.24 --num-of-optimizations 200 \
+  --constructor-args "$(cast abi-encode 'c(address,address,uint256)' $A $B 172800)" \
+  --etherscan-api-key "$ETHERSCAN_API_KEY" --watch
 ```
+
+Confirm through the API rather than by eye:
+
+```bash
+curl -s "https://api.etherscan.io/v2/api?chainid=11155111&module=contract\
+&action=getsourcecode&address=$ADDRESS&apikey=$KEY" | jq -r '.result[0].ContractName'
+```
+
+## 6.6 Push to GitHub
+
+```bash
+git init -b main
+git add -A
+
+# Confirm no secrets are staged — do this before the first commit, not after
+git ls-files | grep -E '\.env$|\.vercel' && echo "STOP: secret staged" || echo "clean"
+
+git commit -m "feat: <what it does>"
+gh repo create <name> --public --source=. --remote=origin \
+  --description "<one line>" --push
+```
+
+`.gitignore` must cover at minimum:
+
+```
+node_modules/
+.env
+.env*.local
+.vercel
+contracts/{out,cache,broadcast,lib}/
+frontend/{.next,next-env.d.ts}
+backend/dist/
+*.tsbuildinfo
+```
+
+## 6.7 Deploy the frontend to Vercel
+
+```bash
+npm i -g vercel
+vercel login
+vercel link --yes --project <name>
+```
+
+### If you used npm workspaces
+
+Vercel detects the framework from the `package.json` at the **deploy root**. A
+workspace root has no framework dependency, so detection fails with
+*"No Next.js version detected"*.
+
+Two fixes — pick one:
+
+**A.** Declare it at the root (npm dedupes, it is not a second install):
+```json
+{ "workspaces": ["packages/*", "backend", "frontend"],
+  "dependencies": { "next": "14.2.23" } }
+```
+
+**B.** Set the project's Root Directory to `frontend` in the Vercel dashboard.
+
+With option A, add `vercel.json` at the repo root:
+
+```json
+{
+  "framework": "nextjs",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build --workspace frontend",
+  "outputDirectory": "frontend/.next"
+}
+```
+
+Your bundler also needs help resolving TypeScript sources from the workspace,
+since ESM relative imports carry a `.js` extension:
+
+```js
+// next.config.mjs
+const nextConfig = {
+  transpilePackages: ['@yourscope/core'],
+  webpack: (config, { webpack }) => {
+    config.resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] };
+    config.externals.push('pino-pretty', 'lokijs', 'encoding');
+    // Wallet libraries pull optional payment sub-packages with no browser build.
+    config.plugins.push(new webpack.IgnorePlugin({ resourceRegExp: /^@x402\// }));
+    return config;
+  },
+};
+export default nextConfig;
+```
+
+### Environment variables
+
+```bash
+printf '%s' "$VALUE" | vercel env add NEXT_PUBLIC_REGISTRY production
+```
+
+Set the public addresses **and** any server-only secrets your API routes need
+(the signer key, storage credentials). Never prefix a secret with
+`NEXT_PUBLIC_` — that publishes it to the browser.
+
+Then deploy and confirm:
+
+```bash
+vercel --prod --yes
+curl -s -o /dev/null -w "%{http_code}\n" https://<project>.vercel.app
+```
+
+**Env vars only take effect on a new deployment.** Adding one to an existing
+deployment changes nothing until you redeploy.
+
+## 6.8 Register the Chainlink services
+
+These require the web dashboards and cannot be scripted.
+
+**Automation** — `automation.chain.link` → Register new Upkeep → Custom logic →
+target = your automation contract, gas limit 500000, starting balance 5 LINK,
+check data `0x`.
+
+**Functions** — `functions.chain.link` → Create subscription → fund with LINK →
+deploy your consumer with the subscription id → **Add consumer** → paste the
+consumer address.
+
+Test the Functions round-trip before relying on it:
+
+```bash
+cast send $CONSUMER "request(uint256,string)" 1 "test-arg" \
+  --rpc-url "$RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY"
+sleep 45
+cast call $CONSUMER "result(uint256)(string)" 1 --rpc-url "$RPC_URL"
+```
+
+If the callback never fires, check in this order: consumer registered on the
+subscription, subscription has LINK, DON id correct for the network.
+
+## 6.9 Prove it end-to-end
+
+Do not claim it works until you have run the whole flow through the **deployed**
+site and confirmed the result by reading the chain:
+
+```bash
+cast call $REGISTRY "get(uint256)" 1 --rpc-url "$RPC_URL"          # terminal status?
+cast call $TOKEN "balanceOf(address)(uint256)" $USER --rpc-url "$RPC_URL"  # moved?
+cast call $VAULT "totalPaidOut()(uint256)" --rpc-url "$RPC_URL"
+```
+
+Record three runs: **one approved, one rejected, one expired**. Deploy a
+short-deadline instance to test expiry rather than waiting two days.
 
 ---
 
-## 11. Known traps
+# PART 7 — Known traps
 
 These cost real debugging time. Handle them up front.
 
-**Signature mismatch.** `abi.encode` on-chain vs `solidityPackedKeccak256`
-off-chain produces different hashes and every verdict reverts with an unhelpful
-error. See §5.3. Assert equality in a test *and* against the deployed contract.
+**Signature mismatch.** `abi.encode` on-chain vs packed encoding off-chain →
+every payout reverts with an unhelpful error. See §4.4.
 
-**Nonce collisions.** Concurrent requests from one signer. See §6.2. It only
-appears under concurrency, so test with at least three simultaneous requests.
+**Nonce collisions.** Concurrent items from one signer. See §4.3. Only appears
+under concurrency — test with at least three simultaneous items.
 
-**`vm.envUint` requires the `0x` prefix.** A raw 64-character hex key is
-perfectly valid and most CLI tools accept it, but Foundry's `vm.envUint` does not.
-Normalize at the boundary — `export KEY="0x${KEY#0x}"` — rather than dictating
-the file format.
+**`vm.envUint` requires the `0x` prefix.** A raw 64-char hex key is valid and most
+CLI tools accept it, but Foundry's `vm.envUint` does not. Normalize at the
+boundary rather than dictating the file format.
 
 **`vm.expectRevert` must come before `vm.prank`.** The reverse order makes the
-test contract the caller and the test passes for the wrong reason.
+test contract the caller, and the test passes for the wrong reason.
 
-**Chainlink contracts tag has no `v` prefix.** `1.2.0`, not `v1.2.0`. The repo is
-also very large — use a shallow single-branch clone rather than a full install.
+**Chainlink contracts tag has no `v` prefix** — `1.2.0`, not `v1.2.0`. The repo is
+also large; use a shallow single-branch clone.
 
-**Wallet libraries pull optional deps that have no browser build.** Expect
-unresolved module errors from payment/analytics sub-packages. Add them to the
-bundler's externals, and use an ignore-plugin with a regex for sub-path imports
-that a plain externals list cannot match.
-
-**A TypeScript workspace package needs bundler help.** ESM source uses `.js` in
-relative imports; the bundler must be told those resolve to `.ts`:
-
-```js
-config.resolve.extensionAlias = { '.js': ['.ts', '.tsx', '.js'] };
-```
-plus adding the package to the framework's transpile list.
-
-**Monorepo framework detection.** A deployment platform detects the framework from
-the `package.json` at the deploy root. A workspace root has no framework
-dependency, so detection fails. Declare it at the root, or point the project's
-root directory at the app package.
+**Chainlink `checkUpkeep` must be `view`** and must return bounded work. An
+unbounded loop over a growing array will eventually exceed the gas limit.
 
 **Do not run a production build while a dev server is running.** They share the
-build output directory; the dev server then serves 404s for its own assets. If
+build output directory and the dev server then serves 404s for its own assets. If
 styles vanish, clear the build directory and restart.
 
-**Social-card image renderers support only a CSS subset.** Sized/positioned
-radial gradients typically fail to parse. Use plain linear gradients there, even
-if the site CSS uses something richer.
+**IPFS propagation is not instant.** A freshly pinned file can 404 on a gateway
+for 20–30 seconds. Try multiple gateways and do not treat the first failure as
+fatal.
 
-**Deposits paid to a treasury that is also the deployer are net-zero.** If you set
-the treasury to the deployer address and test from that same wallet, balances will
-not move as you expect. Not a bug — just confusing during verification.
+**Missing file metadata is not fraud.** Messaging apps strip EXIF routinely.
+Record it as a note with **zero** penalty; only an impossible value (a future
+timestamp) should count against a submission.
+
+**A treasury set to the deployer makes deposits net-zero.** If you test from the
+same wallet that receives deposits, balances will not move as you expect. Not a
+bug, just confusing during verification.
+
+**Social-card image renderers support only a CSS subset.** Sized or positioned
+radial gradients typically fail to parse; use plain linear gradients there.
 
 ---
 
-## 12. Acceptance criteria
+# PART 8 — Deliverables checklist
 
-Do not call it done until every box is ticked.
-
-**Contracts**
-- [ ] Deployed and source-verified on the block explorer
+**Working software**
+- [ ] Contracts deployed and source-verified on Sepolia Etherscan
 - [ ] `forge coverage` ≥ 90% lines on `src/`
 - [ ] Role wiring confirmed by reading `hasRole` back from the chain
 - [ ] Invalid signature reverts; tampered payload reverts
-- [ ] Payout above remaining coverage reverts
-- [ ] Deadline-refund path passes
+- [ ] Payout above the remaining balance reverts
+- [ ] Frontend live on Vercel, builds with no env vars configured
+- [ ] Repo public on GitHub, no secrets in history
+- [ ] Three recorded runs: approved, rejected, expired
+- [ ] A backup demo video — testnets fail during live demos
 
-**Pipeline**
-- [ ] Runs fully with `MOCK_AI=true` and no API keys
-- [ ] Malformed LLM output cannot produce an invalid on-chain value
-- [ ] Judge is deterministic — same inputs, same verdict, every time
-- [ ] Off-chain hash asserted equal to the deployed contract's hash
+**The Rialo argument** — this is what distinguishes your submission
+- [ ] Line counts measured: middleware vs. product logic
+- [ ] Core package has **zero** oracle-vendor imports
+- [ ] A written table: each Rialo capability → what you built instead → what it cost
+- [ ] A named list of the exact files that **disappear** on Rialo
+- [ ] The trust assumption you had to accept, stated plainly, and how Rialo removes it
+- [ ] Onboarding steps a mainstream user must complete today vs. with social login
 
-**Orchestrator**
-- [ ] Processes a request end-to-end in under 120s
-- [ ] Three concurrent requests complete without nonce errors
-- [ ] Resumes in-flight requests after a restart
-- [ ] Health endpoint reports chain lag
+**Write-up structure**
 
-**Frontend**
-- [ ] Builds and renders with no environment variables configured
-- [ ] Purchase flow completes both approve and deposit transactions
-- [ ] Evidence uploads and is retrievable from a gateway
-- [ ] Status tracker updates live and stops polling when terminal
-- [ ] Errors read as sentences, not ABI dumps
-- [ ] Responsive on mobile
+1. What the product does, in one sentence a non-crypto person understands
+2. The flow, in five steps
+3. The capability-to-workaround table with real numbers
+4. The line-count delta
+5. What migrating to Rialo removes — files, services, and the trust hole
 
-**End-to-end on testnet**
-- [ ] One full approved request through the **deployed** path, payout confirmed
-      by reading balances on-chain
-- [ ] One rejected request with the reason stored on-chain
-- [ ] One deadline refund (deploy a short-deadline instance to test this)
-
-**The comparison**
-- [ ] Line counts measured: middleware vs. business logic
-- [ ] The agent package has zero oracle-vendor imports
-- [ ] A written note stating exactly which files disappear on a native-capability
-      chain, and which trust assumption goes away with them
+> A working demo makes you a builder. The measured delta makes you someone who
+> understands *why the chain matters*. Do both.
 
 ---
 
-## 13. Build order summary
+## Reference
 
-```
-1. Contracts + tests            → forge test green, coverage ≥ 90%
-2. Local Anvil deploy           → seed scripts run end-to-end, free
-3. Shared pipeline package      → unit tests green with MOCK_AI
-4. Hash parity check            → TS hash == deployed contract hash
-5. Backend orchestrator         → full run against local Anvil
-6. Frontend                     → builds with no env vars
-7. Serverless orchestrator      → one stage per call, idempotent
-8. Testnet deploy + verify      → roles read back from chain
-9. One full run through prod    → payout confirmed on-chain
-10. Measure the line counts     → write up the comparison
-```
+- Rialo — `rialo.io` · docs at `rialo.io/docs` · blog at `rialo.io/blog`
+- Key posts: *Making the Agent Economy Simple and Safe with Rialo*,
+  *How Rialo Secures Prediction Markets*, *Bringing Private Credit Onchain*
+- Foundry Book — `book.getfoundry.sh`
+- wagmi — `wagmi.sh` · viem — `viem.sh`
+- Chainlink Functions — `docs.chain.link/chainlink-functions`
+- Chainlink Automation — `docs.chain.link/chainlink-automation`
 
-Work in this order. Skipping ahead to the frontend before the contracts are
-tested means debugging three layers at once.
+*Rialo facts in Part 1 reflect publicly announced information as of early 2026.
+Verify current status at `rialo.io` before publishing claims — the network, token
+and programme details are all still moving.*
