@@ -11,8 +11,10 @@ export {
 } from './agents/estimator.js';
 export {
   judgeAgent,
+  needsHumanReview,
   MIN_CONFIDENCE,
   MIN_CROSS_CHECK_SCORE,
+  REVIEW_CONFIDENCE_FLOOR,
   type Verdict,
   type JudgeInput,
 } from './agents/judge.js';

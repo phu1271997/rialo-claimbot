@@ -20,7 +20,7 @@ const STEPS = [
 
 export function ClaimStatusTracker({ claimId }: { claimId: bigint }) {
   const { claim, isLoading } = useClaimStatus(claimId);
-  useClaimPipeline(claimId, claim?.status);
+  const { needsReview } = useClaimPipeline(claimId, claim?.status);
 
   if (isLoading && !claim) {
     return (
@@ -132,6 +132,22 @@ export function ClaimStatusTracker({ claimId }: { claimId: bigint }) {
           })}
         </ol>
       </div>
+
+      {needsReview && inFlight && (
+        <div className="card glass-edge animate-fade-up border-signal-warn/30 bg-signal-warn/[0.06] p-6">
+          <div className="flex items-center gap-2 text-lg font-bold text-signal-warn">
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-signal-warn text-ink-950">
+              ⚑
+            </span>
+            Awaiting human review
+          </div>
+          <p className="mt-2 text-sm leading-relaxed text-slate-300">
+            The AI is not confident enough to decide this claim on its own, so it has been routed to
+            a human reviewer. A person will inspect the photo and the agent findings, then approve or
+            reject it by hand. You do not need to do anything — the verdict will appear here.
+          </p>
+        </div>
+      )}
 
       {paid && (
         <div className="card glass-edge animate-fade-up border-accent/30 bg-accent/[0.06] p-6">

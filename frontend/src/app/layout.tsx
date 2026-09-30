@@ -98,9 +98,10 @@ function SiteFooter() {
             Product
           </div>
           <ul className="space-y-2 text-slate-400">
+            <li><Link href="/dashboard" className="transition hover:text-slate-100">Dashboard</Link></li>
             <li><Link href="/policies" className="transition hover:text-slate-100">Plans</Link></li>
             <li><Link href="/claims/new" className="transition hover:text-slate-100">File a claim</Link></li>
-            <li><Link href="/claims" className="transition hover:text-slate-100">My claims</Link></li>
+            <li><Link href="/review" className="transition hover:text-slate-100">Review console</Link></li>
           </ul>
         </nav>
 

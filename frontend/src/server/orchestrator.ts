@@ -5,10 +5,14 @@ import {
   estimatorAgent,
   extractorAgent,
   judgeAgent,
+  needsHumanReview,
   signVerdict,
   verifierAgent,
+  type EstimatedCost,
   type ExtractedData,
   type PipelineContext,
+  type Verdict,
+  type VerifiedData,
 } from '@claimbot/pipeline';
 import claimRegistryAbi from '@/lib/abis/ClaimRegistry.json';
 import policyManagerAbi from '@/lib/abis/PolicyManager.json';
@@ -26,13 +30,36 @@ import policyManagerAbi from '@/lib/abis/PolicyManager.json';
  * not a different pipeline.
  */
 
+interface VerdictView {
+  approved: boolean;
+  amount: string;
+  confidence: number;
+  reasoning: string;
+}
+
 export interface StageResult {
   claimId: number;
   from: ClaimStatus;
   to: ClaimStatus;
   done: boolean;
   txHash?: string;
-  verdict?: { approved: boolean; amount: string; confidence: number; reasoning: string };
+  verdict?: VerdictView;
+  /** True when the machine deferred to a human instead of auto-deciding. */
+  needsReview?: boolean;
+}
+
+/** The three agent outputs plus the machine's provisional verdict, for a reviewer. */
+export interface ClaimAnalysis {
+  claimId: number;
+  status: ClaimStatus;
+  ready: boolean; // status === Judged, so a verdict can be submitted
+  needsReview: boolean;
+  confidence: number;
+  provisional: VerdictView;
+  extracted: ExtractedData;
+  verified: VerifiedData;
+  estimated: EstimatedCost;
+  remainingCoverage: string;
 }
 
 interface OnChainClaim {
@@ -127,31 +154,24 @@ export async function advanceClaim(claimId: number): Promise<StageResult> {
     return { claimId, from, to, done: false, txHash: tx.hash };
   }
 
-  const evidence = claim.evidenceIPFS;
-  const extracted: ExtractedData = await extractorAgent(evidence, ctx);
-  const verified = await verifierAgent(extracted, evidence, ctx);
-  const estimated = await estimatorAgent(extracted, ctx);
+  // Judged: run the agents once, then either auto-decide or defer to a human.
+  const { verdict, review } = await runAgents(claim, policyManager, ctx);
 
-  const remainingCoverage = await policyManager.remainingCoverage(claim.policyId);
-  const verdict = judgeAgent({ extracted, verified, estimated, remainingCoverage });
+  if (review) {
+    // Low confidence with no fraud signal. Leave the claim at Judged and wait
+    // for a human verdict via submitHumanVerdict. No transaction is sent, so
+    // this stays safe to call repeatedly.
+    return {
+      claimId,
+      from,
+      to: from,
+      done: false,
+      needsReview: true,
+      verdict: toVerdictView(verdict),
+    };
+  }
 
-  const signature = await signVerdict(
-    oracle,
-    claimId,
-    verdict.approved,
-    verdict.amount,
-    verdict.confidence,
-    verdict.reasoning,
-  );
-
-  const tx = await registry.submitVerdict(
-    claimId,
-    verdict.approved,
-    verdict.amount,
-    verdict.confidence,
-    verdict.reasoning,
-    signature,
-  );
+  const tx = await finalize(oracle, registry, claimId, verdict);
   await tx.wait();
 
   return {
@@ -160,11 +180,141 @@ export async function advanceClaim(claimId: number): Promise<StageResult> {
     to: verdict.approved ? ClaimStatus.Paid : ClaimStatus.Rejected,
     done: true,
     txHash: tx.hash,
-    verdict: {
-      approved: verdict.approved,
-      amount: verdict.amount.toString(),
-      confidence: verdict.confidence,
-      reasoning: verdict.reasoning,
-    },
+    verdict: toVerdictView(verdict),
+  };
+}
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+function toVerdictView(v: Verdict): VerdictView {
+  return {
+    approved: v.approved,
+    amount: v.amount.toString(),
+    confidence: v.confidence,
+    reasoning: v.reasoning,
+  };
+}
+
+interface CoverageReader {
+  remainingCoverage(id: bigint): Promise<bigint>;
+}
+
+/** Runs the three agents plus the deterministic judge, and flags review need. */
+async function runAgents(
+  claim: OnChainClaim,
+  policyManager: CoverageReader,
+  ctx: PipelineContext,
+) {
+  const evidence = claim.evidenceIPFS;
+  const extracted: ExtractedData = await extractorAgent(evidence, ctx);
+  const verified = await verifierAgent(extracted, evidence, ctx);
+  const estimated = await estimatorAgent(extracted, ctx);
+  const remainingCoverage = await policyManager.remainingCoverage(claim.policyId);
+  const input = { extracted, verified, estimated, remainingCoverage };
+  return {
+    extracted,
+    verified,
+    estimated,
+    remainingCoverage,
+    verdict: judgeAgent(input),
+    review: needsHumanReview(input),
+  };
+}
+
+async function finalize(
+  oracle: Wallet,
+  registry: RegistryWrites,
+  claimId: number,
+  verdict: Verdict,
+): Promise<ContractTransactionResponse> {
+  const signature = await signVerdict(
+    oracle,
+    claimId,
+    verdict.approved,
+    verdict.amount,
+    verdict.confidence,
+    verdict.reasoning,
+  );
+  return registry.submitVerdict(
+    claimId,
+    verdict.approved,
+    verdict.amount,
+    verdict.confidence,
+    verdict.reasoning,
+    signature,
+  );
+}
+
+/** Read-only: run the agents and return the analysis without touching the chain. */
+export async function analyzeClaim(claimId: number): Promise<ClaimAnalysis> {
+  const { registry, policyManager } = wired();
+  const ctx = context();
+
+  const claim = await registry.claims(claimId);
+  if (claim.claimant === ZERO_ADDRESS) throw new Error(`Claim ${claimId} does not exist`);
+
+  const status = Number(claim.status) as ClaimStatus;
+  const { extracted, verified, estimated, remainingCoverage, verdict, review } = await runAgents(
+    claim,
+    policyManager,
+    ctx,
+  );
+
+  return {
+    claimId,
+    status,
+    ready: status === ClaimStatus.Judged,
+    needsReview: review,
+    confidence: verdict.confidence,
+    provisional: toVerdictView(verdict),
+    extracted,
+    verified,
+    estimated,
+    remainingCoverage: remainingCoverage.toString(),
+  };
+}
+
+/** Finalizes a claim from a human reviewer's decision. Only valid at Judged. */
+export async function submitHumanVerdict(
+  claimId: number,
+  approved: boolean,
+  amountUsdc: bigint,
+  reasoning: string,
+): Promise<StageResult> {
+  const { oracle, registry, policyManager } = wired();
+
+  const claim = await registry.claims(claimId);
+  if (claim.claimant === ZERO_ADDRESS) throw new Error(`Claim ${claimId} does not exist`);
+
+  const status = Number(claim.status) as ClaimStatus;
+  if (status !== ClaimStatus.Judged) {
+    throw new Error(`Claim ${claimId} is not awaiting a verdict (status ${status})`);
+  }
+
+  let amount = approved ? amountUsdc : 0n;
+  if (approved) {
+    const remaining = await policyManager.remainingCoverage(claim.policyId);
+    if (amount > remaining) amount = remaining;
+    if (amount <= 0n) {
+      throw new Error('Approved amount must be positive and within the remaining coverage');
+    }
+  }
+
+  const reason =
+    reasoning.trim() ||
+    (approved ? 'Approved by a human reviewer after manual inspection.' : 'Rejected by a human reviewer after manual inspection.');
+  // A human decided, so confidence is recorded as full.
+  const verdict: Verdict = { approved, amount, confidence: 100, reasoning: reason };
+
+  const tx = await finalize(oracle, registry, claimId, verdict);
+  await tx.wait();
+
+  return {
+    claimId,
+    from: ClaimStatus.Judged,
+    to: approved ? ClaimStatus.Paid : ClaimStatus.Rejected,
+    done: true,
+    txHash: tx.hash,
+    verdict: toVerdictView(verdict),
   };
 }

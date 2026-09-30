@@ -19,6 +19,28 @@ export interface JudgeInput {
 
 export const MIN_CROSS_CHECK_SCORE = 50;
 export const MIN_CONFIDENCE = 70;
+/** Below this the claim is too uncertain even for a person; auto-rejected. */
+export const REVIEW_CONFIDENCE_FLOOR = 40;
+
+/**
+ * True when the only thing standing between this claim and approval is
+ * confidence — no fraud signal, identity checks out, a cost was estimated, and
+ * the score sits in the [floor, threshold) band. These are the claims a human
+ * reviewer should decide by hand instead of the machine auto-rejecting them.
+ */
+export function needsHumanReview(input: JudgeInput): boolean {
+  const { extracted, verified, estimated } = input;
+  const confidence = Math.min(extracted.confidence, verified.cross_check_score);
+  return (
+    extracted.red_flags.length === 0 &&
+    extracted.vehicle_type !== 'unknown' &&
+    extracted.image_quality !== 'edited_suspected' &&
+    verified.cross_check_score >= MIN_CROSS_CHECK_SCORE &&
+    estimated.recommended_payout_usdc > 0 &&
+    confidence < MIN_CONFIDENCE &&
+    confidence >= REVIEW_CONFIDENCE_FLOOR
+  );
+}
 
 /**
  * Deterministic aggregation — deliberately not an LLM call. The verdict is the

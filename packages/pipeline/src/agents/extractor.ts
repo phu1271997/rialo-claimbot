@@ -78,13 +78,27 @@ const MOCK_RESULT: ExtractedData = {
   scene_description: 'Motorbike parked at the roadside, broken headlight and snapped left mirror, dry road surface.',
 };
 
+/**
+ * Mock confidence derived deterministically from the evidence reference, so a
+ * demo produces a realistic mix: some photos read clearly (high confidence,
+ * auto-decided) and some are borderline (routed to a human reviewer). Spread
+ * across 48–95 so a fair share lands in the [40, 70) manual-review band.
+ */
+function mockConfidenceFor(evidenceIPFS: string): number {
+  let h = 0;
+  for (let i = 0; i < evidenceIPFS.length; i++) {
+    h = (h * 31 + evidenceIPFS.charCodeAt(i)) >>> 0;
+  }
+  return 48 + (h % 48);
+}
+
 export async function extractorAgent(
   evidenceIPFS: string,
   { config, logger }: PipelineContext,
 ): Promise<ExtractedData> {
   if (config.mockAI) {
     logger.warn({ evidenceIPFS }, 'MOCK_AI enabled — extractor returning canned result');
-    return MOCK_RESULT;
+    return { ...MOCK_RESULT, confidence: mockConfidenceFor(evidenceIPFS) };
   }
 
   const imageData = await fetchIPFS(evidenceIPFS, config);

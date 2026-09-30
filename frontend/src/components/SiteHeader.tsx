@@ -8,9 +8,11 @@ import { Logo } from './Logo';
 import { WalletConnect } from './WalletConnect';
 
 const NAV = [
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/policies', label: 'Plans' },
   { href: '/claims/new', label: 'File a claim' },
   { href: '/claims', label: 'My claims' },
+  { href: '/review', label: 'Review' },
 ];
 
 export function SiteHeader() {
