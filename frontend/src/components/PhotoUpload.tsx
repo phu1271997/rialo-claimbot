@@ -66,8 +66,10 @@ export function PhotoUpload({
       <div
         {...getRootProps()}
         className={cn(
-          'grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed p-8 text-center transition',
-          isDragActive ? 'border-accent bg-accent/5' : 'border-white/15 hover:border-white/30',
+          'group grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed p-8 text-center transition duration-200',
+          isDragActive
+            ? 'border-accent bg-accent/10 scale-[0.99]'
+            : 'border-white/15 bg-white/[0.02] hover:border-accent/40 hover:bg-white/[0.04]',
         )}
       >
         <input {...getInputProps()} />
@@ -78,12 +80,18 @@ export function PhotoUpload({
         ) : preview ? (
           // Blob preview of a user-selected file; next/image would need a remote loader.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="Selected damage photo" className="max-h-64 rounded-xl object-contain" />
+          <img src={preview} alt="Selected damage photo" className="max-h-64 rounded-xl object-contain shadow-lift" />
         ) : (
-          <div className="space-y-1">
-            <div className="text-3xl">📷</div>
-            <div className="font-medium">Drag and drop a damage photo here</div>
-            <div className="text-sm text-slate-500">or click to browse — JPG/PNG, auto-compressed to {MAX_SIZE_MB}MB</div>
+          <div className="space-y-2.5">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl border border-white/10 bg-white/[0.03] text-2xl transition group-hover:border-accent/30 group-hover:text-accent">
+              ↑
+            </div>
+            <div className="font-medium">
+              {isDragActive ? 'Drop the photo to upload' : 'Drag a damage photo here'}
+            </div>
+            <div className="text-sm text-slate-500">
+              or click to browse — JPG / PNG, auto-compressed to {MAX_SIZE_MB}MB
+            </div>
           </div>
         )}
       </div>

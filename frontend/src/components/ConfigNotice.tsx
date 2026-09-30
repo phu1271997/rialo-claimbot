@@ -8,8 +8,12 @@ export function ConfigNotice() {
   if (contractsConfigured) return null;
 
   return (
-    <div className="card mb-6 border-amber-400/30 bg-amber-400/5 p-4 text-sm">
-      <div className="font-semibold text-amber-300">Contract addresses are not configured</div>
+    <div className="card mb-6 flex gap-3 border-signal-warn/25 bg-signal-warn/[0.06] p-4 text-sm">
+      <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-signal-warn/15 text-signal-warn">
+        !
+      </span>
+      <div>
+      <div className="font-semibold text-signal-warn">Contract addresses are not configured</div>
       <p className="mt-1 text-slate-300">
         Deploy the contracts to Sepolia, then set{' '}
         <code className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-xs">
@@ -21,6 +25,7 @@ export function ConfigNotice() {
         </code>{' '}
         in the environment variables. Until then, on-chain actions will not work.
       </p>
+      </div>
     </div>
   );
 }

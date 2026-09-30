@@ -11,6 +11,7 @@ import { ConfigNotice } from '@/components/ConfigNotice';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatUsdc } from '@/lib/format';
+import { cn } from '@/lib/cn';
 
 const MIN_DESCRIPTION = 10;
 
@@ -26,7 +27,8 @@ export default function NewClaimPage() {
 
   const activePolicies = policies.filter((p) => p.active);
   const busy = step === 'uploading' || step === 'submitting';
-  const ready = !!policyId && !!file && description.trim().length >= MIN_DESCRIPTION;
+  const descOk = description.trim().length >= MIN_DESCRIPTION;
+  const ready = !!policyId && !!file && descOk;
 
   if (step === 'done' && claimId !== undefined) {
     router.push(`/claims/${claimId}`);
@@ -36,21 +38,36 @@ export default function NewClaimPage() {
     <div className="mx-auto max-w-2xl space-y-8">
       <ConfigNotice />
 
-      <header>
-        <h1 className="text-3xl font-bold">File a new claim</h1>
-        <p className="mt-2 text-slate-400">
-          Your photo is compressed and pinned to IPFS, then four AI agents process it in roughly 60–90 seconds.
-        </p>
-      </header>
+      <div>
+        <Link
+          href="/claims"
+          className="text-sm text-slate-500 transition hover:text-slate-200"
+        >
+          ← My claims
+        </Link>
+        <header className="mt-3">
+          <span className="text-sm font-medium text-accent">New claim</span>
+          <h1 className="mt-1 text-4xl font-bold tracking-tightest">File a claim</h1>
+          <p className="mt-3 text-slate-400">
+            Your photo is compressed and stored, then four AI agents process it in roughly 60–90
+            seconds and settle any payout on-chain.
+          </p>
+        </header>
+      </div>
 
       {!isConnected ? (
-        <EmptyState title="Wallet not connected" description="Connect your wallet to see your policies and file a claim." />
+        <EmptyState
+          icon="⬡"
+          title="Wallet not connected"
+          description="Connect your wallet to see your policies and file a claim."
+        />
       ) : isLoading ? (
-        <div className="flex items-center gap-2 text-sm text-slate-400">
+        <div className="card flex items-center gap-2 p-6 text-sm text-slate-400">
           <Spinner /> Loading policies…
         </div>
       ) : activePolicies.length === 0 ? (
         <EmptyState
+          icon="⚑"
           title="No active policy"
           description="You need to buy a plan before you can file a claim."
           action={
@@ -61,7 +78,7 @@ export default function NewClaimPage() {
         />
       ) : (
         <form
-          className="space-y-6"
+          className="card space-y-6 p-6 md:p-7"
           onSubmit={(e) => {
             e.preventDefault();
             if (ready && file) void submit(BigInt(policyId), file, description.trim());
@@ -103,21 +120,28 @@ export default function NewClaimPage() {
               placeholder="e.g. Minor collision at the Nguyen Trai junction around 6pm — broken headlight and snapped left mirror."
               className="field resize-none"
             />
-            <p className="mt-1.5 text-xs text-slate-500">
-              {description.trim().length}/{MIN_DESCRIPTION} characters minimum
+            <p
+              className={cn(
+                'mt-1.5 text-xs',
+                descOk ? 'text-accent' : 'text-slate-500',
+              )}
+            >
+              {descOk
+                ? '✓ Looks good'
+                : `${description.trim().length}/${MIN_DESCRIPTION} characters minimum`}
             </p>
           </div>
 
           {error && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-400">
+            <div className="rounded-xl border border-signal-bad/25 bg-signal-bad/[0.08] p-3 text-sm text-signal-bad">
               {error}
             </div>
           )}
 
-          <button type="submit" disabled={!ready || busy} className="btn-primary w-full">
+          <button type="submit" disabled={!ready || busy} className="btn-primary w-full py-3">
             {step === 'uploading' && (
               <>
-                <Spinner /> Uploading photo to IPFS…
+                <Spinner /> Uploading photo…
               </>
             )}
             {step === 'submitting' && (
@@ -127,6 +151,10 @@ export default function NewClaimPage() {
             )}
             {!busy && 'Submit claim'}
           </button>
+
+          <p className="text-center text-xs text-slate-600">
+            Two steps: the photo is stored, then the claim is written on-chain from your wallet.
+          </p>
         </form>
       )}
     </div>

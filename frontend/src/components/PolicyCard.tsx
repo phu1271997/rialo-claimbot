@@ -18,40 +18,52 @@ export function PolicyCard({
   return (
     <div
       className={cn(
-        'card flex flex-col gap-4 p-6 transition hover:border-white/20',
-        featured && 'border-accent/40 ring-1 ring-accent/20',
+        'card card-hover relative flex flex-col p-6',
+        featured && 'border-accent/40 shadow-glow',
       )}
     >
       {featured && (
-        <div className="w-fit rounded-full bg-accent/15 px-2.5 py-1 text-xs font-semibold text-accent">
-          Most popular
-        </div>
+        <>
+          <div className="pointer-events-none absolute -inset-px -z-10 rounded-2xl bg-gradient-to-b from-accent/20 to-transparent opacity-60" />
+          <div className="absolute -top-3 left-6 chip-accent shadow-card">Most popular</div>
+        </>
       )}
 
-      <div>
-        <div className="text-xs uppercase tracking-wide text-slate-500">Monthly premium</div>
-        <div className="text-3xl font-bold">{formatUsdc(tier.premium)}</div>
-        <div className="text-sm text-slate-500">≈ {usdcToVnd(tier.premium)}/month</div>
+      {/* Fixed-height price block keeps feature lists aligned across the row. */}
+      <div className="min-h-[92px]">
+        <div className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Monthly premium
+        </div>
+        <div className="num mt-1 flex items-baseline gap-1.5">
+          <span className="text-4xl font-bold tracking-tight">{formatUsdc(tier.premium).replace(' USDC', '')}</span>
+          <span className="text-sm font-medium text-slate-500">USDC / mo</span>
+        </div>
+        <div className="num text-sm text-slate-500">≈ {usdcToVnd(tier.premium)}/month</div>
       </div>
 
-      <dl className="space-y-2 border-t border-white/10 pt-4 text-sm">
-        <div className="flex justify-between">
-          <dt className="text-slate-500">Coverage limit</dt>
-          <dd className="font-semibold">{formatUsdc(tier.coverage)}</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-slate-500">Equivalent</dt>
-          <dd>{usdcToVnd(tier.coverage)}</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-slate-500">Term</dt>
-          <dd>{String(tier.durationDays)} days</dd>
-        </div>
+      <dl className="mt-2 space-y-2.5 border-t border-white/10 pt-5 text-sm">
+        <Row label="Coverage limit" value={formatUsdc(tier.coverage)} strong />
+        <Row label="Equivalent" value={usdcToVnd(tier.coverage)} />
+        <Row label="Term" value={`${String(tier.durationDays)} days`} />
       </dl>
 
-      <button type="button" onClick={onSelect} disabled={disabled} className="btn-primary mt-auto">
-        Buy this plan
+      <button
+        type="button"
+        onClick={onSelect}
+        disabled={disabled}
+        className={cn('mt-6', featured ? 'btn-primary' : 'btn-ghost')}
+      >
+        {featured ? 'Get this plan' : 'Choose plan'}
       </button>
+    </div>
+  );
+}
+
+function Row({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className={cn('num', strong ? 'font-semibold text-slate-100' : 'text-slate-300')}>{value}</dd>
     </div>
   );
 }
