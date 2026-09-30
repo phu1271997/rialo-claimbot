@@ -16,18 +16,40 @@ const spaceGrotesk = Space_Grotesk({
 const jetbrains = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', display: 'swap' });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://rialo-claimbot.vercel.app'),
+  metadataBase: new URL('https://rialo-claimbot-five.vercel.app'),
+  applicationName: 'ClaimBot',
   title: {
     default: 'ClaimBot — Motorbike insurance in 90 seconds',
     template: '%s · ClaimBot',
   },
   description:
-    'File a motorbike insurance claim in 90 seconds. Four AI agents verify, estimate and judge automatically. USDC payout settles on-chain on Ethereum Sepolia.',
+    'File a motorbike insurance claim in 90 seconds. Four AI agents verify, estimate and judge automatically. USDC payout settles on-chain on Ethereum Sepolia. Open-source testnet demo.',
+  keywords: [
+    'ClaimBot',
+    'motorbike insurance',
+    'Ethereum Sepolia',
+    'testnet',
+    'USDC',
+    'AI claims',
+    'Rialo',
+  ],
+  authors: [{ name: 'phu1271997', url: 'https://github.com/phu1271997/rialo-claimbot' }],
+  creator: 'phu1271997',
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true },
   openGraph: {
     title: 'ClaimBot — Motorbike insurance in 90 seconds',
     description:
-      'Four AI agents verify, estimate and judge a damage claim automatically. USDC settles on-chain.',
+      'Four AI agents verify, estimate and judge a damage claim automatically. USDC settles on-chain on Ethereum Sepolia.',
+    url: 'https://rialo-claimbot-five.vercel.app',
+    siteName: 'ClaimBot',
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ClaimBot — Motorbike insurance in 90 seconds',
+    description:
+      'Four AI agents verify, estimate and judge a damage claim automatically. USDC settles on-chain.',
   },
 };
 

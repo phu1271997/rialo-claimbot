@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://rialo-claimbot-five.vercel.app/sitemap.xml
