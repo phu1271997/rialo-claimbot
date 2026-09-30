@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { putEvidence } from '@/server/evidenceStore';
 
 export const runtime = 'nodejs';
 
@@ -6,17 +7,16 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /**
- * Server-side proxy so PINATA_JWT never reaches the browser.
+ * Uploads a damage photo and returns a CID-like hash for `submitClaim`.
+ *
+ * Two backends, transparent to the caller:
+ *  - PINATA_JWT set  → pin to IPFS through Pinata (the production path). The JWT
+ *    never reaches the browser; this route is the only thing that holds it.
+ *  - PINATA_JWT unset → store the bytes on this server, content-addressed, and
+ *    serve them back through `/ipfs/<cid>`. This keeps the whole flow working
+ *    with zero external accounts, for local testing and demos.
  */
 export async function POST(req: Request) {
-  const jwt = process.env.PINATA_JWT;
-  if (!jwt) {
-    return NextResponse.json(
-      { error: 'IPFS upload is not configured: PINATA_JWT is missing on the server.' },
-      { status: 503 },
-    );
-  }
-
   let file: File | null;
   try {
     const formData = await req.formData();
@@ -34,6 +34,21 @@ export async function POST(req: Request) {
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: 'Image exceeds 5MB' }, { status: 413 });
+  }
+
+  const jwt = process.env.PINATA_JWT;
+  if (!jwt) {
+    // Keyless fallback: no Pinata account needed.
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const cid = await putEvidence(bytes);
+      return NextResponse.json({ ipfsHash: cid, storage: 'local' });
+    } catch (err) {
+      return NextResponse.json(
+        { error: 'Could not store the photo locally', detail: String(err).slice(0, 200) },
+        { status: 500 },
+      );
+    }
   }
 
   const pinataForm = new FormData();
@@ -61,7 +76,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Pinata did not return an IpfsHash' }, { status: 502 });
     }
 
-    return NextResponse.json({ ipfsHash: data.IpfsHash });
+    return NextResponse.json({ ipfsHash: data.IpfsHash, storage: 'pinata' });
   } catch (err) {
     return NextResponse.json(
       { error: 'Could not reach Pinata', detail: String(err).slice(0, 200) },

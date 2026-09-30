@@ -12,7 +12,14 @@ export function gatewayUrl(hash: string, gateway: string): string {
 
 /** Pinata first, then public mirrors — Pinata's gateway is the flaky part of a demo. */
 export async function fetchIPFS(hash: string, config: PipelineConfig): Promise<Uint8Array> {
-  const gateways = [config.pinataGateway, 'https://ipfs.io', 'https://cloudflare-ipfs.com'];
+  const gateways = [
+    // The evidence gateway resolves the keyless upload fallback's local CIDs; it
+    // is tried first and is a no-op when unset or when the CID is a real one.
+    ...(config.evidenceGateway ? [config.evidenceGateway] : []),
+    config.pinataGateway,
+    'https://ipfs.io',
+    'https://cloudflare-ipfs.com',
+  ];
   const cid = normalizeCid(hash);
   const errors: string[] = [];
 

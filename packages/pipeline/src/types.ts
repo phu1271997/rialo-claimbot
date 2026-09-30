@@ -9,6 +9,13 @@ export interface PipelineConfig {
   anthropicApiKey?: string | undefined;
   anthropicModel: string;
   pinataGateway: string;
+  /**
+   * Extra gateway tried first, ahead of Pinata and the public mirrors. The
+   * serverless orchestrator points this at its own `/ipfs` route so it can read
+   * back photos stored by the keyless upload fallback. Unset in production,
+   * where evidence is pinned to real IPFS.
+   */
+  evidenceGateway?: string | undefined;
   openWeatherKey?: string | undefined;
 }
 
@@ -43,6 +50,7 @@ export function configFromEnv(env: Record<string, string | undefined>): Pipeline
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     anthropicModel: env.ANTHROPIC_MODEL ?? DEFAULT_ANTHROPIC_MODEL,
     pinataGateway: env.PINATA_GATEWAY ?? DEFAULT_PINATA_GATEWAY,
+    evidenceGateway: env.EVIDENCE_GATEWAY,
     openWeatherKey: env.OPENWEATHER_KEY,
   };
 }
